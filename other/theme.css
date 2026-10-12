@@ -320,22 +320,117 @@
 }
 
 /* ============================================================
-   主题扫描切换 overlay
+   主题切换 —— 极致顺滑的全局呼吸渐变（消除遮罩覆盖感）
    ============================================================ */
+
 .theme-scan-overlay {
     position: fixed;
     inset: 0;
     z-index: 99999;
     pointer-events: none;
-    will-change: clip-path;
-    clip-path: inset(0 100% 0 0);
-    animation: themeScan 0.85s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+    
+    /* 使用新主题的背景渐变作为覆盖层 */
+    background: linear-gradient(160deg, var(--theme-bg-start) 0%, var(--theme-bg-end) 100%);
+    
+    /* 核心：去掉所有扫光、波浪和遮罩，纯透明度动画 */
+    opacity: 0;
+    
+    /* 0.6秒的缓慢淡入淡出，配合平缓的贝塞尔曲线 */
+    animation: fadeSweep 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: opacity;
 }
 
-@keyframes themeScan {
-    0%   { clip-path: inset(0 100% 0 0); }   /* 从左出现 */
-    50%  { clip-path: inset(0 0 0 0); }      /* 铺满 */
-    100% { clip-path: inset(0 0 0 100%); }   /* 向右消失 */
+@keyframes fadeSweep {
+    0% {
+        opacity: 0;
+    }
+    50% {
+        /* 轻轻盖上一层，让视觉有个柔和的过渡 */
+        opacity: 0.85;
+    }
+    100% {
+        /* 呼吸般淡出，完全消失，露出底下已经变好颜色的界面 */
+        opacity: 0;
+    }
+}
+
+/* ============================================================
+   主题切换 —— 极致顺滑的呼吸感过渡（隐藏底层过程）
+   ============================================================ */
+
+.theme-scan-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 99999;
+    pointer-events: none;
+    
+    /* 核心：使用 backdrop-filter 模糊，像镜头对焦一样掩盖底层变化 */
+    backdrop-filter: blur(0px);
+    -webkit-backdrop-filter: blur(0px);
+    
+    opacity: 0;
+    /* 0.85 秒的平滑呼吸时长，使用缓出曲线 */
+    animation: smoothBlurTransition 0.85s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    will-change: opacity, backdrop-filter;
+}
+
+@keyframes smoothBlurTransition {
+    0% {
+        opacity: 0;
+        backdrop-filter: blur(0px);
+        -webkit-backdrop-filter: blur(0px);
+    }
+    25% {
+        /* 快速模糊，此时底层开始悄悄变色，但用户看不清 */
+        opacity: 1;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+    65% {
+        /* 保持模糊状态，给底层足够的时间完成变色 */
+        opacity: 1;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+    100% {
+        /* 平滑淡出，露出已经完美变好色的新主题界面 */
+        opacity: 0;
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+    }
+}
+
+/* ============================================================
+   让底层元素在幕后快速完成变色（不让用户看到过程）
+   ============================================================ */
+body,
+.sidebar,
+.card,
+.info-box,
+.nav-item,
+.nav-sub-item,
+.avatar-wrapper img,
+input,
+textarea,
+select,
+button,
+.badge,
+.status-tag,
+.setting-btn,
+.action-btn,
+.dialog,
+.chat-box,
+.shop-item,
+.feedback-item,
+.health-card,
+table, th, td,
+.announce-item,
+.purchase-user {
+    /* 极短的过渡时间，确保在模糊的掩护下瞬间完成变色 */
+    transition:
+        background-color 0.1s ease,
+        color 0.1s ease,
+        border-color 0.1s ease !important;
 }
 
 /* ============================================================
@@ -508,3 +603,107 @@ body, .sidebar, .card, .info-box, .nav-item, .avatar-wrapper img {
         border-color var(--transition-slow),
         box-shadow var(--transition-slow);
 }
+/* ============================================================
+   QQ 风格动态主题 —— 流光呼吸特效
+   ============================================================ */
+
+/* 让 5 款 QQ 主题的背景缓慢流动 */
+[data-theme="qq-night"] body,
+[data-theme="qq-cyber"] body,
+[data-theme="qq-sakura"] body,
+[data-theme="qq-aurora"] body,
+[data-theme="qq-ocean"] body {
+    background-size: 300% 300% !important;
+    animation: dynamicGradient 12s ease-in-out infinite !important;
+}
+
+/* 动态呼吸曲线：背景位置缓缓推移 */
+@keyframes dynamicGradient {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+/* 如果需要更强烈的光晕效果，可以给卡片或侧边栏加一点轻微的滤镜呼吸 */
+[data-theme="qq-night"] .card,
+[data-theme="qq-cyber"] .card,
+[data-theme="qq-sakura"] .card,
+[data-theme="qq-aurora"] .card,
+[data-theme="qq-ocean"] .card {
+    animation: cardGlow 8s ease-in-out infinite;
+}
+
+@keyframes cardGlow {
+    0%, 100% { box-shadow: 0 1px 2px rgba(0,0,0,0.3); }
+    50% { box-shadow: 0 4px 20px rgba(255,255,255,0.05); }
+}
+/* ============================================================
+   QQ 风格 · 多色动态流光背景（彻底解决遮挡问题）
+   ============================================================ */
+
+/* 1. 定义多色流动背景 */
+[data-theme="qq-fluid-1"] body {
+    background: linear-gradient(135deg, #ff007f, #ff7300, #ffeb00, #00d2ff, #7a00ff, #ff007f) !important;
+    background-size: 600% 600% !important;
+    animation: qqFluidFlow 15s ease infinite !important;
+}
+[data-theme="qq-fluid-2"] body {
+    background: linear-gradient(135deg, #051923, #00b4d8, #7209b7, #3a0ca3, #051923) !important;
+    background-size: 500% 500% !important;
+    animation: qqFluidFlow 20s ease infinite !important;
+}
+[data-theme="qq-fluid-3"] body {
+    background: linear-gradient(135deg, #10002b, #240046, #3c096c, #5a189a, #10002b) !important;
+    background-size: 400% 400% !important;
+    animation: qqFluidFlow 18s ease infinite !important;
+}
+[data-theme="qq-fluid-4"] body {
+    background: linear-gradient(135deg, #000000, #1a0b2e, #2d134d, #4c1d95, #000000) !important;
+    background-size: 500% 500% !important;
+    animation: qqFluidFlow 25s ease infinite !important;
+}
+
+@keyframes qqFluidFlow {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+/* 2. 核心！让侧边栏、卡片、主内容区变半透明，露出底部的流光 */
+[data-theme="qq-fluid-1"] .sidebar,
+[data-theme="qq-fluid-1"] .card,
+[data-theme="qq-fluid-1"] .main-wrapper,
+[data-theme="qq-fluid-2"] .sidebar,
+[data-theme="qq-fluid-2"] .card,
+[data-theme="qq-fluid-2"] .main-wrapper,
+[data-theme="qq-fluid-3"] .sidebar,
+[data-theme="qq-fluid-3"] .card,
+[data-theme="qq-fluid-3"] .main-wrapper,
+[data-theme="qq-fluid-4"] .sidebar,
+[data-theme="qq-fluid-4"] .card,
+[data-theme="qq-fluid-4"] .main-wrapper {
+    background: rgba(15, 23, 42, 0.45) !important; /* 深色半透明玻璃 */
+    backdrop-filter: blur(24px); /* 磨砂玻璃效果，像 QQ 一样高级 */
+    -webkit-backdrop-filter: blur(24px);
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 主内容区本身需要继承背景，不要遮挡 */
+[data-theme="qq-fluid-1"] .main-content,
+[data-theme="qq-fluid-2"] .main-content,
+[data-theme="qq-fluid-3"] .main-content,
+[data-theme="qq-fluid-4"] .main-content {
+    background: transparent !important;
+}
+
+/* 3. 主题圆点样式 */
+.theme-dot[data-theme="qq-fluid-1"] { background: linear-gradient(135deg, #ff007f, #ff7300, #00d2ff, #7a00ff); }
+.theme-dot[data-theme="qq-fluid-2"] { background: linear-gradient(135deg, #00b4d8, #7209b7, #3a0ca3); }
+.theme-dot[data-theme="qq-fluid-3"] { background: linear-gradient(135deg, #240046, #5a189a, #3c096c); }
+.theme-dot[data-theme="qq-fluid-4"] { background: linear-gradient(135deg, #1a0b2e, #4c1d95, #2d134d); }

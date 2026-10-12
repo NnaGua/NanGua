@@ -14,7 +14,7 @@
         animations: 'on'
     };
 
-    var THEMES = [
+        var THEMES = [
         { code: 'default',   label: '金' },
         { code: 'blue',      label: '蓝' },
         { code: 'purple',    label: '紫' },
@@ -41,7 +41,13 @@
         { code: 'navy',      label: '藏青' },
         { code: 'lotus',     label: '藕荷' },
         { code: 'bamboo',    label: '竹青' },
-        { code: 'light',     label: '浅色' }
+        { code: 'light',     label: '浅色' },
+        
+        // ===== 新增：QQ 风格多色动态渐变主题 =====
+        { code: 'qq-fluid-1', label: 'QQ幻彩' },
+        { code: 'qq-fluid-2', label: 'QQ极光' },
+        { code: 'qq-fluid-3', label: 'QQ霓虹' },
+        { code: 'qq-fluid-4', label: 'QQ星云' }
     ];
 
     function getLocal(key) {

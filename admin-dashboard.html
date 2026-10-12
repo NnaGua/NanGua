@@ -141,14 +141,16 @@
                 <div class="nav-sub-item" data-tab="aiCost"      data-i18n="adminWall.navCost">💰 AI 成本</div>
             </div>
 
-            <div class="nav-group" data-group="users">
-                <span class="nav-text" data-i18n="adminDash.navUsers">👥 注册用户列表</span>
-                <span class="nav-arrow" data-arrow="users">▾</span>
-            </div>
-            <div class="nav-sub" data-sub="users">
-                <div class="nav-sub-item" data-tab="profiles" data-i18n="adminDash.navUserList">📋 用户列表</div>
-                <div class="nav-sub-item" data-tab="manage" data-i18n="adminDash.navUserManage">⚙️ 用户管理</div>
-            </div>
+            <!-- 找到这段 -->
+<div class="nav-group" data-group="users">
+    <span class="nav-text" data-i18n="adminDash.navUsers">👥 注册用户列表</span>
+    <span class="nav-arrow" data-arrow="users">▾</span>
+</div>
+<div class="nav-sub" data-sub="users">
+    <div class="nav-sub-item" data-tab="profiles" data-i18n="adminDash.navUserList">📋 用户列表</div>
+    <div class="nav-sub-item" data-tab="manage" data-i18n="adminDash.navUserManage">⚙️ 用户管理</div>
+    <div class="nav-sub-item" data-tab="machineCodes" data-i18n="adminDash.machineCodesTitle">💻 机器码管理</div>
+</div>
 
             <div class="nav-item" data-tab="server">
                 <span class="nav-text" data-i18n="adminDash.navServer">📊 服务端信息</span>
@@ -162,15 +164,17 @@
                 <span class="nav-text" data-i18n="adminDash.navMyFriends">💬 我的好友</span>
             </div>
 
-            <div class="nav-group" data-group="theme">
-                <span class="nav-text" data-i18n="adminDash.navThemeGroup">🎨 外观设置</span>
-                <span class="nav-arrow" data-arrow="theme">▾</span>
-            </div>
-            <div class="nav-sub" data-sub="theme">
-                <div class="nav-sub-item" data-tab="theme" data-i18n="adminDash.navTheme">🎨 主题设置</div>
-                <div class="nav-sub-item" data-tab="sound" data-i18n="adminDash.navSound">🔊 音效设置</div>
-            </div>
-
+            <!-- 找到原来的 theme 分组，替换为如下内容 -->
+<div class="nav-group" data-group="theme">
+    <span class="nav-text" data-i18n="adminDash.navSettingsGroup">⚙️ 设置</span>
+    <span class="nav-arrow" data-arrow="theme">▾</span>
+</div>
+<div class="nav-sub" data-sub="theme">
+    <div class="nav-sub-item" data-tab="theme" data-i18n="adminDash.navTheme">🎨 外观设置</div>
+    <div class="nav-sub-item" data-tab="sound" data-i18n="adminDash.navSound">🔊 音效设置</div>
+    <!-- 新增这个 -->
+    <div class="nav-sub-item" data-tab="sysConfig" data-i18n="adminDash.navSysConfig">🔒 系统配置</div>
+</div>
         </nav>
     </aside>
 
@@ -629,6 +633,38 @@
                     </div>
                 </div>
             </div>
+            <!-- 机器码管理 -->
+<div class="card" id="cardMachineCodes">
+    <div class="card-head">
+        <h2 data-i18n="adminDash.machineCodesTitle">💻 机器码管理</h2>
+        <div class="head-actions">
+            <span class="badge" id="badgeMachineCodes">—</span>
+            <button class="refresh-btn-mini" id="refreshMachineCodesBtn" title="刷新">🔄</button>
+        </div>
+    </div>
+    
+    <div class="fb-toolbar" style="margin-bottom: 12px; display: flex; gap: 8px; flex-wrap: wrap;">
+        <button class="action-btn block" id="machineBatchInfiniteBtn">♾️ 一键全部无限获得试用</button>
+        <button class="action-btn del" id="machineBatchCloseBtn">🚫 一键全部关闭试用</button>
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>机器码</th>
+                    <th>关联用户</th>
+                    <th>试用状态</th>
+                    <th>封禁状态</th>
+                    <th>操作</th>
+                </tr>
+            </thead>
+            <tbody id="machineCodesBody">
+                <tr><td colspan="5" class="loading">加载中...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
             <!-- 积分商城（管理端） -->
             <div class="card" id="cardShop">
@@ -813,6 +849,22 @@
                     <button class="setting-reset-btn" id="resetAppearanceBtn" data-i18n="adminDash.themeResetBtn">↺ 恢复默认设置</button>
                 </div>
             </div>
+            <!-- 系统配置 -->
+<div class="card" id="cardSysConfig">
+    <div class="card-head">
+        <h2 data-i18n="adminDash.sysConfigTitle">🔒 系统配置</h2>
+        <span class="badge" data-i18n="adminDash.sysConfigBadge">全局生效</span>
+    </div>
+    <div class="theme-section-hint" data-i18n="adminDash.sysConfigHint">系统级全局开关，请谨慎操作。</div>
+    
+    <div class="toggle-row">
+        <div class="toggle-label">
+            <span class="title" data-i18n="adminDash.sysConfigBanLoginTitle">🚫 禁止普通用户登录</span>
+            <span class="desc" data-i18n="adminDash.sysConfigBanLoginDesc">开启后，除管理员外的所有用户将无法登录，已登录用户不受影响。</span>
+        </div>
+        <button type="button" class="toggle-switch" id="toggleUserLogin" aria-label="禁止普通用户登录开关"></button>
+    </div>
+</div>
 
             <!-- 音效设置 -->
             <div class="card" id="cardSound">

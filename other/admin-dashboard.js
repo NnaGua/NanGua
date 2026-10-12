@@ -34,27 +34,28 @@ window.__adLangChanged = applyLang;
 
     /* 4 个主按钮 → 每个按钮收纳的 tab 集合 */
     var TABBAR_GROUPS = [
-        {
-            key: 'msg', icon: '📬', label: '消息',
-            tabs: ['announce', 'forgot', 'feedback']
-        },
-        {
-            key: 'points', icon: '📊', label: '积分',
-            tabs: ['points', 'pointLogs', 'shop', 'purchases', 'achievements']
-        },
-        {
-            key: 'users', icon: '👥', label: '用户',
-            tabs: ['profiles', 'manage', 'myCheckin', 'myFriends']
-        },
-        {
-            key: 'system', icon: '⚙️', label: '系统',
-            tabs: [
-                'aiDecisions', 'aiConfig', 'aiWordlist', 'wallPosts',
-                'aiTrust', 'aiCost', 'server', 'theme', 'sound'
-            ]
-        }
-    ];
-
+    {
+        key: 'msg', icon: '📬', label: '消息',
+        tabs: ['announce', 'forgot', 'feedback']
+    },
+    {
+        key: 'points', icon: '📊', label: '积分',
+        tabs: ['points', 'pointLogs', 'shop', 'purchases', 'achievements']
+    },
+    {
+        key: 'users', icon: '👥', label: '用户',
+        // ★ 把 machineCodes 加到"用户"分组
+        tabs: ['profiles', 'manage', 'machineCodes', 'myCheckin', 'myFriends']
+    },
+    {
+        key: 'system', icon: '⚙️', label: '系统',
+        // ★ 把 sysConfig 加到"系统"分组
+        tabs: [
+            'aiDecisions', 'aiConfig', 'aiWordlist', 'wallPosts',
+            'aiTrust', 'aiCost', 'server', 'theme', 'sound', 'sysConfig'
+        ]
+    }
+];
     var tabbarEl = null;
     var submenuEl = null;
     var activeGroupKey = null;
@@ -282,6 +283,8 @@ document.querySelectorAll('.nav-group').forEach(function (group) {
  *  视图切换
  * ============================================================ */
 var CARDS = {
+    sysConfig:   'cardSysConfig',
+    machineCodes:'cardMachineCodes',
     announce:  'cardAnnounce',
     points:    'cardPoints',
     pointLogs: 'cardPointLogs',
@@ -321,6 +324,8 @@ function switchTab(tab) {
             el.classList.remove('active');
         }
     });
+    if (tab === 'machineCodes') loadMachineCodes();
+    if (tab === 'sysConfig')    loadSysConfig();
     if (tab === 'announce')  loadAnnouncements();
     if (tab === 'points')    loadPoints();
     if (tab === 'pointLogs') loadAllPointLogs();
@@ -2914,30 +2919,48 @@ document.getElementById('myChatInput').addEventListener('keydown', function (e) 
  *  动态语言刷新
  * ============================================================ */
 function refreshDynamicText() {
+    // 1. 应用语言到所有 data-i18n 标签
+    if (window.LangHelper && window.LangHelper.apply) {
+        window.LangHelper.apply();
+    }
+
+    // 2. 刷新当前激活的卡片内容（异步重新加载数据，让动态文本也变语言）
     try {
-                var cards = {
-            'cardAnnounce':  loadAnnouncements,
-            'cardPoints':    loadPoints,
-            'cardPointLogs': loadAllPointLogs,
-            'cardForgot':    loadForgotRequests,
+        var cards = {
+            'cardAnnounce':     loadAnnouncements,
+            'cardPoints':       loadPoints,
+            'cardPointLogs':    loadAllPointLogs,
+            'cardForgot':       loadForgotRequests,
             'cardAchievements': loadAchievements,
-            'cardProfiles':  loadProfiles,
-            'cardShop':      loadAdminShop,
-            'cardPurchases': loadPurchases,
-            'cardFeedback':  loadAllFeedbacks,
-            'cardMyCheckin': function () { myRefreshCheckinUI(); myLoadCheckinCalendar(); },
-            'cardMyFriends': myLoadFriends,
-            'cardAiDecisions': function () { window.adminWallLoaders && window.adminWallLoaders.aiDecisions(); },
-            'cardAiConfig':    function () { window.adminWallLoaders && window.adminWallLoaders.aiConfig(); },
-            'cardAiWordlist':  function () { window.adminWallLoaders && window.adminWallLoaders.aiWordlist(); },
-            'cardWallPosts':   function () { window.adminWallLoaders && window.adminWallLoaders.wallPosts(); },
-            'cardAiTrust':     function () { window.adminWallLoaders && window.adminWallLoaders.aiTrust(); },
-            'cardAiCost':      function () { window.adminWallLoaders && window.adminWallLoaders.aiCost(); }
+            'cardProfiles':     loadProfiles,
+            'cardShop':         loadAdminShop,
+            'cardPurchases':    loadPurchases,
+            'cardFeedback':     loadAllFeedbacks,
+            // ★ 你新加的两张卡片
+            'cardMachineCodes': loadMachineCodes,
+            'cardSysConfig':    loadSysConfig,
+            // 我的签到 / 好友
+            'cardMyCheckin':    function () { myRefreshCheckinUI(); myLoadCheckinCalendar(); },
+            'cardMyFriends':    myLoadFriends,
+            // 动态墙
+            'cardAiDecisions':  function () { window.adminWallLoaders && window.adminWallLoaders.aiDecisions(); },
+            'cardAiConfig':     function () { window.adminWallLoaders && window.adminWallLoaders.aiConfig(); },
+            'cardAiWordlist':   function () { window.adminWallLoaders && window.adminWallLoaders.aiWordlist(); },
+            'cardWallPosts':    function () { window.adminWallLoaders && window.adminWallLoaders.wallPosts(); },
+            'cardAiTrust':      function () { window.adminWallLoaders && window.adminWallLoaders.aiTrust(); },
+            'cardAiCost':       function () { window.adminWallLoaders && window.adminWallLoaders.aiCost(); }
         };
-        if (window.LangHelper && window.LangHelper.apply) {
-            window.LangHelper.apply();
-        }
-    } catch (e) {}
+
+        // ★ 只刷新当前激活的卡片，避免无谓的请求
+        Object.keys(cards).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && el.classList.contains('active')) {
+                try { cards[id](); } catch (e) { console.warn('[refreshDynamicText] ' + id + ' 刷新失败', e); }
+            }
+        });
+    } catch (e) {
+        console.warn('[refreshDynamicText] 异常', e);
+    }
 }
 window.refreshDynamicText = refreshDynamicText;
 
@@ -2947,3 +2970,194 @@ window.refreshDynamicText = refreshDynamicText;
 document.addEventListener('DOMContentLoaded', function () {
     setTimeout(applyLang, 100);
 });
+/* ============================================================
+ *  机器码管理逻辑
+ * ============================================================ */
+function loadMachineCodes() {
+    var body = document.getElementById('machineCodesBody');
+    var badge = document.getElementById('badgeMachineCodes');
+    if (!body) return;
+    body.innerHTML = '<tr><td colspan="5" class="loading">' + t('common.loading', '加载中...') + '</td></tr>';
+
+    supabaseClient.from('machine_codes').select('*').order('created_at', { ascending: false })
+        .then(function(res) {
+            if (res.error) {
+                body.innerHTML = '<tr><td colspan="5" class="empty">加载失败：' + res.error.message + '</td></tr>';
+                return;
+            }
+            var data = res.data || [];
+            badge.textContent = data.length + ' 条';
+            if (data.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" class="empty">暂无机器码记录</td></tr>';
+                return;
+            }
+
+            // 如果有 user_id，去查一下对应的 profiles 拿邮箱和昵称
+            var userIds = data.filter(function(d) { return d.user_id; }).map(function(d) { return d.user_id; });
+            
+            var fetchProfiles = userIds.length > 0 
+                ? supabaseClient.from('profiles').select('id, email, full_name').in('id', userIds)
+                : Promise.resolve({ data: [] });
+
+            fetchProfiles.then(function(pRes) {
+                var profileMap = {};
+                (pRes.data || []).forEach(function(p) { profileMap[p.id] = p; });
+
+                var html = '';
+                data.forEach(function(item) {
+                    var userHtml = '<span style="color:var(--theme-text-faint);">未绑定用户</span>';
+                    if (item.user_id && profileMap[item.user_id]) {
+                        var u = profileMap[item.user_id];
+                        userHtml = '<div style="display:flex;flex-direction:column;">' +
+                            '<span>' + escapeHtml(u.full_name || '—') + '</span>' +
+                            '<span style="font-size:0.8em;color:var(--theme-text-faint);">' + escapeHtml(u.email || item.email || '—') + '</span>' +
+                            '</div>';
+                    } else if (item.email) {
+                        userHtml = '<span>' + escapeHtml(item.email) + '</span>';
+                    }
+
+                    var trialHtml = '';
+                    if (item.is_infinite_trial) {
+                        trialHtml = '<span class="status-tag active" style="color:#d4a574;background:rgba(212,165,116,.12);border-color:rgba(212,165,116,.3);">♾️ 无限试用</span>';
+                    } else if (item.trial_expires_at) {
+                        var expires = new Date(item.trial_expires_at);
+                        var isExpired = expires < new Date();
+                        trialHtml = '<span class="status-tag ' + (isExpired ? 'blocked' : 'pending') + '">' + 
+                            (isExpired ? '已过期' : '剩余至 ' + expires.toLocaleDateString()) + '</span>';
+                    } else {
+                        trialHtml = '<span class="status-tag">未设置</span>';
+                    }
+
+                    var banHtml = item.is_banned 
+                        ? '<span class="status-tag blocked">已封禁</span>' 
+                        : '<span class="status-tag active">正常</span>';
+
+                    html += '<tr>' +
+                        '<td><strong style="font-family:monospace;">' + escapeHtml(item.machine_id) + '</strong></td>' +
+                        '<td>' + userHtml + '</td>' +
+                        '<td>' + trialHtml + '</td>' +
+                        '<td>' + banHtml + '</td>' +
+                        '<td style="white-space:nowrap;">' +
+                            '<button class="action-btn edit mc-reset-btn" data-id="' + item.machine_id + '" title="重置试用">🔄 重置试用</button>' +
+                            '<button class="action-btn ' + (item.is_banned ? 'unblock' : 'block') + ' mc-ban-btn" data-id="' + item.machine_id + '" data-banned="' + item.is_banned + '">' + (item.is_banned ? '解封' : '封禁') + '</button>' +
+                            '<button class="action-btn del mc-del-btn" data-id="' + item.machine_id + '" style="margin-left:4px;">删除</button>' +
+                        '</td>' +
+                    '</tr>';
+                });
+                body.innerHTML = html;
+
+                // 绑定按钮事件
+                body.querySelectorAll('.mc-del-btn').forEach(function(btn) {
+                    btn.onclick = function() {
+                        var mid = this.getAttribute('data-id');
+                        if (!confirm('确定要删除机器码 ' + mid + ' 吗？')) return;
+                        supabaseClient.from('machine_codes').delete().eq('machine_id', mid).then(function(r) {
+                            if (r.error) { alert('删除失败：' + r.error.message); return; }
+                            loadMachineCodes();
+                        });
+                    };
+                });
+
+                body.querySelectorAll('.mc-ban-btn').forEach(function(btn) {
+                    btn.onclick = function() {
+                        var mid = this.getAttribute('data-id');
+                        var isBanned = this.getAttribute('data-banned') === 'true';
+                        supabaseClient.from('machine_codes').update({ 
+                            is_banned: !isBanned,
+                            updated_at: new Date().toISOString()
+                        }).eq('machine_id', mid).then(function(r) {
+                            if (r.error) { alert('操作失败：' + r.error.message); return; }
+                            loadMachineCodes();
+                        });
+                    };
+                });
+
+                body.querySelectorAll('.mc-reset-btn').forEach(function(btn) {
+                    btn.onclick = function() {
+                        var mid = this.getAttribute('data-id');
+                        supabaseClient.from('machine_codes').update({ 
+                            trial_expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 重新给3天
+                            is_infinite_trial: false,
+                            updated_at: new Date().toISOString()
+                        }).eq('machine_id', mid).then(function(r) {
+                            if (r.error) { alert('操作失败：' + r.error.message); return; }
+                            alert('已重置为 3 天试用');
+                            loadMachineCodes();
+                        });
+                    };
+                });
+            });
+        });
+}
+
+// 刷新按钮
+document.getElementById('refreshMachineCodesBtn').onclick = function() {
+    var btn = this;
+    btn.classList.add('spinning');
+    supabaseClient.from('machine_codes').select('*').order('created_at', { ascending: false })
+        .then(function() {
+            loadMachineCodes();
+            btn.classList.remove('spinning');
+        });
+};
+
+// 一键全部无限试用
+document.getElementById('machineBatchInfiniteBtn').onclick = function() {
+    if (!confirm('确定要一键让所有机器码无限试用吗？')) return;
+    supabaseClient.from('machine_codes').update({ 
+        is_infinite_trial: true, 
+        trial_expires_at: null,
+        updated_at: new Date().toISOString()
+    }).neq('machine_id', '').then(function(r) {
+        if (r.error) { alert('操作失败：' + r.error.message); return; }
+        alert('已开启全部无限试用');
+        loadMachineCodes();
+    });
+};
+
+// 一键全部关闭试用
+document.getElementById('machineBatchCloseBtn').onclick = function() {
+    if (!confirm('确定要一键关闭所有机器码的试用吗？')) return;
+    supabaseClient.from('machine_codes').update({ 
+        is_infinite_trial: false,
+        trial_expires_at: new Date().toISOString(), // 立即过期
+        updated_at: new Date().toISOString()
+    }).neq('machine_id', '').then(function(r) {
+        if (r.error) { alert('操作失败：' + r.error.message); return; }
+        alert('已关闭全部试用');
+        loadMachineCodes();
+    });
+};
+
+
+/* ============================================================
+ *  系统配置逻辑（禁止普通用户登录开关）
+ * ============================================================ */
+function loadSysConfig() {
+    supabaseClient.from('system_settings').select('*').eq('key', 'allow_user_login').maybeSingle()
+        .then(function(res) {
+            var toggle = document.getElementById('toggleUserLogin');
+            if (!toggle) return;
+            // 如果 allow_user_login 是 'false'，说明禁止登录（开关是打开的）
+            var isBanned = (res.data && res.data.value === 'false');
+            toggle.classList.toggle('active', isBanned);
+            toggle.setAttribute('aria-pressed', isBanned ? 'true' : 'false');
+        });
+}
+
+document.getElementById('toggleUserLogin').onclick = function() {
+    var isCurrentlyBanned = this.classList.contains('active');
+    var newValue = isCurrentlyBanned ? 'true' : 'false'; // 当前是禁止状态，要改成允许(true)
+
+    var actionText = isCurrentlyBanned ? '取消禁止登录' : '禁止普通用户登录';
+    if (!confirm('确定要【' + actionText + '】吗？')) return;
+
+    supabaseClient.from('system_settings').update({ 
+        value: newValue,
+        updated_at: new Date().toISOString()
+    }).eq('key', 'allow_user_login').then(function(r) {
+        if (r.error) { alert('操作失败：' + r.error.message); return; }
+        alert('设置已生效');
+        loadSysConfig();
+    });
+};
