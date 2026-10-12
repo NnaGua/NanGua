@@ -19,16 +19,16 @@ window.BACKGROUND_CONFIG = {
     video: [
         // 'video/文件名.mp4',
         // 'dynamic/文件名.mp4',
-        'video/哥伦比亚.mp4',
-        'video/株.mp4',
+        //'video/哥伦比亚.mp4',
+        //'video/株.mp4',
         //'dynamic/hutao.mp4'
     ],
 
     /* ============ 图片 ============ */
     image: [
         // 'image/文件名.jpg',
-        'image/女孩.jpg',
-        'image/宵宫.jpg',
+        //'image/女孩.jpg',
+        'image/不是哥们.jpg',
         //'image/hutao.jpg',
         //'image/xiaogong.jpg'
     ]
