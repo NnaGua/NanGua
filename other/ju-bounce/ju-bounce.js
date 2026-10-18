@@ -354,7 +354,7 @@
         var sizeLabel = el('label', { for: 'size-slider', text: '大小' });
         sizeSlider = el('input', {
             type: 'range', id: 'size-slider',
-            min: '0.2', max: '5', step: '0.1', value: '1'
+            min: '0.2', max: '2', step: '0.1', value: '1'
         });
         sizeValue = el('span', { id: 'size-value', text: '1.0×' });
         sizeControl.appendChild(sizeLabel);
@@ -475,11 +475,10 @@
         setSFXVolume(parseFloat(volumeSliderSFX.value));
     }
 
-    function applySize(scale) {
-        scale = Math.max(0.2, Math.min(5, scale));
+        function applySize(scale) {
+        scale = Math.max(0.2, Math.min(8, scale));
         jufufu.style.width = (CFG.size * scale) + 'px';
         sizeValue.textContent = scale.toFixed(1) + '×';
-        sizeSlider.value = scale;
         try { localStorage.setItem(STORAGE_SIZE_SCALE, String(scale)); } catch (e) {}
         clampToViewport();
     }
@@ -728,12 +727,15 @@
         updateVolumeIcon(0);
 
         var savedScale = parseFloat(localStorage.getItem(STORAGE_SIZE_SCALE));
-        applySize(isNaN(savedScale) ? 1 : savedScale);
+        var initScale = isNaN(savedScale) ? 1 : savedScale;
+        sizeSlider.value = initScale;
+        
+        applySize(initScale);
 
         bindEvents();
         updateStats();
 
-        // 异步拉取用户信息（自动判断登录态）
+        
         loadUserAndScore();
 
         lastFrame = 0;

@@ -1,5 +1,5 @@
 /* ============================================================
- *  user-dashboard.html 主逻辑（多语言版 + 成就系统 + 动态墙）
+ *  user-dashboard.html 主逻辑（多语言版 + 成就系统 + 动态墙 + 作品管理）
  * ============================================================ */
 
 function t(key, fallback) {
@@ -22,32 +22,33 @@ function applyLang() {
 window.__udLangChanged = applyLang;
 
 /* ============================================================
- *  移动端底部标签栏 · 4 主按钮
+ *  移动端底部标签栏 · 5 主按钮
  * ============================================================ */
 (function setupMobileTabbar() {
     'use strict';
 
     function isMobile() { return window.innerWidth <= 768; }
 
-    /* 4 个主按钮 → 每个按钮收纳的 tab 集合
-     * 主页为特殊按钮：点击时触发 #homeNavItem.click()，
-     * 让原逻辑（切换 tab + 展开资料面板）自动复用 */
     var TABBAR_GROUPS = [
         {
             key: 'home', icon: '🏠', label: '主页',
             special: 'home'
         },
         {
-            key: 'msg', icon: '📬', label: '消息',
-            tabs: ['announce', 'wall', 'friends']
+            key: 'works', icon: '🐺', label: '作品',
+            tabs: ['publicWorks', 'excellentWorks', 'myWorks', 'favWorks']
         },
         {
-            key: 'points', icon: '📊', label: '积分',
-            tabs: ['checkin', 'achievements', 'shop']
+            key: 'msg', icon: '📬', label: '消息',
+            tabs: ['announce', 'wall']
+        },
+        {
+            key: 'points', icon: '💎', label: '积分',
+            tabs: ['shop', 'checkin']
         },
         {
             key: 'me', icon: '👤', label: '我的',
-            tabs: ['theme', 'feedback']
+            tabs: ['achievements', 'friends', 'theme', 'feedback']
         }
     ];
 
@@ -74,11 +75,9 @@ window.__udLangChanged = applyLang;
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 if (g.special === 'home') {
-                    /* 主页：直接触发原 nav-item 逻辑 */
                     var homeNav = document.getElementById('homeNavItem');
                     if (homeNav) homeNav.click();
                     closeSubmenu();
-                    /* 主动高亮自己 */
                     setActiveGroup('home');
                     return;
                 }
@@ -121,7 +120,6 @@ window.__udLangChanged = applyLang;
         var group = TABBAR_GROUPS.filter(function (g) { return g.key === key; })[0];
         if (!group || !group.tabs) return;
 
-        /* 复用侧边栏里的文案，避免再造一份翻译 */
         var nav = document.querySelector('.nav-menu');
         var html = '';
         group.tabs.forEach(function (tabName) {
@@ -148,10 +146,8 @@ window.__udLangChanged = applyLang;
     function closeSubmenu() {
         activeGroupKey = null;
         if (submenuEl) submenuEl.classList.remove('show');
-        /* 不主动清除高亮，交给 syncActiveTab 决定 */
     }
 
-    /* 外部调用：切 tab 时高亮对应主按钮 */
     function syncActiveTab(tabName) {
         if (!tabbarEl) return;
         var group = TABBAR_GROUPS.filter(function (g) {
@@ -181,7 +177,6 @@ window.__udLangChanged = applyLang;
             }, 150);
         });
 
-        /* 点空白关闭子菜单 */
         document.addEventListener('click', function (e) {
             if (!e.target.closest('.mobile-tabbar') &&
                 !e.target.closest('.mobile-submenu')) {
@@ -386,17 +381,38 @@ document.getElementById('homeNavItem').addEventListener('click', function () {
     profileArrow.classList.toggle('open', profilePanel.classList.contains('open'));
 });
 
-var msgGroup = document.getElementById('msgGroup');
-var msgArrow = document.getElementById('msgArrow');
-var msgSub   = document.getElementById('msgSub');
-msgGroup.addEventListener('click', function () {
-    msgSub.classList.toggle('open');
-    msgArrow.classList.toggle('open', msgSub.classList.contains('open'));
-    msgGroup.classList.toggle('open', msgSub.classList.contains('open'));
+// ============================================================
+//  侧边栏折叠 / 展开逻辑（手风琴效果）
+// ============================================================
+document.querySelectorAll('.nav-group').forEach(function (group) {
+    group.addEventListener('click', function () {
+        var key = this.getAttribute('data-group');
+        var sub = document.querySelector('.nav-sub[data-sub="' + key + '"]');
+        var arrow = this.querySelector('.nav-arrow');
+        if (!sub) return;
+
+        var willOpen = !sub.classList.contains('open');
+
+        // 关闭所有子菜单
+        document.querySelectorAll('.nav-sub').forEach(function (el) { el.classList.remove('open'); });
+        document.querySelectorAll('.nav-group .nav-arrow').forEach(function (el) { el.classList.remove('open'); });
+        document.querySelectorAll('.nav-group').forEach(function (el) { el.classList.remove('open'); });
+
+        // 如果是要打开，则展开当前项
+        if (willOpen) {
+            sub.classList.add('open');
+            arrow.classList.add('open');
+            this.classList.add('open');
+        }
+    });
 });
 
 var CARDS = {
     home:        'cardHome',
+    publicWorks: 'cardPublicWorks',
+    excellentWorks: 'cardExcellentWorks',
+    myWorks:     'cardMyWorks',
+    favWorks:    'cardFavWorks',
     announce:    'cardAnnounce',
     wall:        'cardWall',
     checkin:     'cardCheckin',
@@ -408,31 +424,53 @@ var CARDS = {
 };
 
 function switchTab(tab) {
+    // 1. 清除所有激活状态
     document.querySelectorAll('.nav-item, .nav-sub-item').forEach(function (el) {
-        el.classList.toggle('active', el.getAttribute('data-tab') === tab);
+        el.classList.remove('active');
     });
+    
+    // 2. 寻找当前 tab 对应的元素并高亮
+    var activeEl = document.querySelector('.nav-item[data-tab="' + tab + '"], .nav-sub-item[data-tab="' + tab + '"]');
+    if (activeEl) {
+        activeEl.classList.add('active');
 
+        // 如果点击的是子菜单，让它所属的父级分组也高亮
+        if (activeEl.classList.contains('nav-sub-item')) {
+            var parentSub = activeEl.closest('.nav-sub');
+            if (parentSub) {
+                var parentGroup = document.querySelector('.nav-group[data-group="' + parentSub.getAttribute('data-sub') + '"]');
+                if (parentGroup) parentGroup.classList.add('open');
+            }
+        }
+    }
+
+    // 3. 切换右侧内容卡片
     Object.keys(CARDS).forEach(function (k) {
         var el = document.getElementById(CARDS[k]);
         if (!el) return;
         if (k === tab) {
             el.classList.remove('active');
-            void el.offsetWidth;
+            void el.offsetWidth; // 触发重绘
             el.classList.add('active');
         } else {
             el.classList.remove('active');
         }
     });
 
+    // 4. 触发数据加载
     if (tab === 'announce') loadAnnouncements();
     if (tab === 'wall' && typeof loadWall === 'function') loadWall();
+    
+    // 🌟 加载作品数据
+    if (tab === 'publicWorks')     loadWorksList('publicWorks');
+    if (tab === 'excellentWorks')  loadWorksList('excellentWorks');
+    if (tab === 'myWorks')         loadWorksList('myWorks');
+    if (tab === 'favWorks')        loadWorksList('favWorks');
+
     if (tab === 'feedback') {
         loadMyFeedbacks();
         if (currentUser) {
-            supabaseClient.from('profiles')
-                .select('points')
-                .eq('id', currentUser.id)
-                .maybeSingle()
+            supabaseClient.from('profiles').select('points').eq('id', currentUser.id).maybeSingle()
                 .then(function (r) {
                     if (r.data) {
                         var el = document.getElementById('myPoints');
@@ -446,7 +484,8 @@ function switchTab(tab) {
     if (tab === 'shop')     loadShop();
     if (tab === 'friends')  loadFriends();
 
-        if (window.syncMobileTabbar) {
+    // 5. 同步移动端底部 Tabbar 高亮
+    if (window.syncMobileTabbar) {
         window.syncMobileTabbar(tab);
     }
 }
@@ -572,6 +611,327 @@ function loadAnnouncements() {
             listEl.innerHTML = html;
         });
 }
+
+/* ============================================================
+ * 作品管理模块 (Supabase Storage 终极版)
+ * ============================================================ */
+var COS_BUCKET = 'wenjian-1486273443';
+var COS_REGION = 'ap-chongqing';
+var cos = null;
+var cosReady = false;
+
+var currentCategoryList = 'myWorks';
+var tempWorkFile = null;
+var currentEditWorkId = null;
+var tempCoverUrl = '';
+var tempCoverFileKey = '';
+
+async function initCOS() {
+    var uploadBtn = document.querySelector('.upload-btn');
+    if (uploadBtn) {
+        uploadBtn.innerHTML = '<span style="font-size: 1.2em;">⏳</span> 正在连接云端...';
+        uploadBtn.style.opacity = '0.6';
+        uploadBtn.style.pointerEvents = 'none';
+    }
+
+    try {
+        const { data, error } = await supabaseClient.functions.invoke('cos-sts');
+        if (error) throw error;
+        if (!data || !data.credentials) throw new Error('未获取到有效秘钥');
+
+        cos = new COS({
+            getAuthorization: function (options, callback) {
+                callback({
+                    TmpSecretId: data.credentials.tmpSecretId,
+                    TmpSecretKey: data.credentials.tmpSecretKey,
+                    XCosSecurityToken: data.credentials.sessionToken,
+                    StartTime: data.startTime,
+                    ExpiredTime: data.expiredTime,
+                });
+            }
+        });
+        cosReady = true;
+        
+        if (uploadBtn) {
+            uploadBtn.innerHTML = '<span style="font-size: 1.2em;">📤</span> 上传新作品';
+            uploadBtn.style.opacity = '1';
+            uploadBtn.style.pointerEvents = 'auto';
+        }
+    } catch (err) {
+        console.error('COS 初始化异常:', err);
+        if (uploadBtn) {
+            var errMsg = err.message || (err.error && err.error.message) || '未知错误';
+            uploadBtn.innerHTML = '<span style="font-size: 1.2em;">❌</span> 失败: ' + errMsg;
+            uploadBtn.style.opacity = '0.8';
+            uploadBtn.style.color = '#ff6b6b';
+            uploadBtn.style.pointerEvents = 'none';
+        }
+    }
+}
+initCOS();
+
+function loadWorksList(category) {
+    currentCategoryList = category;
+    var container = document.getElementById(category + 'List');
+    if (!container) return;
+
+    container.innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
+
+    var query = supabaseClient.from('user_works').select('*').eq('category', category).order('created_at', { ascending: false });
+    if (category === 'myWorks' || category === 'favWorks') {
+        query = query.eq('user_id', currentUser.id);
+    }
+
+    query.then(function (res) {
+        if (res.error) {
+            container.innerHTML = '<div class="empty-state">加载失败：' + res.error.message + '</div>';
+            return;
+        }
+        var data = res.data || [];
+        if (data.length === 0) {
+            container.innerHTML = '<div class="empty-state">暂时没有任何作品哦~</div>';
+            return;
+        }
+
+        var html = '';
+        data.forEach(function (item) {
+            var isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file_name);
+            var isVid = /\.(mp4|webm|mov)$/i.test(item.file_name);
+            var defaultIcon = isImg ? '🖼️' : (isVid ? '🎬' : '📄');
+            
+            var headerHtml = item.cover_url
+                ? `<img class="work-cover" src="${escapeHtml(item.cover_url)}" alt="cover">`
+                : `<div class="work-icon">${defaultIcon}</div>`;
+
+            var title = item.title || item.file_name;
+            var desc = item.description || '暂无简介';
+            var safeTitle = escapeHtml(title);
+            var safeDesc = escapeHtml(desc);
+            var safeFileName = escapeHtml(item.file_name);
+            var safeFileKey = escapeHtml(item.file_key);
+
+            var sizeStr = (item.file_size / 1024 / 1024).toFixed(2) + ' MB';
+            var timeStr = new Date(item.created_at).toLocaleDateString();
+
+            var manageBtns = '';
+            if (item.user_id === currentUser.id) {
+                manageBtns = `
+                    <div style="display:flex; gap:4px;">
+                        <button class="action-btn edit" style="padding:4px 8px; border-radius:6px;" onclick="editWork('${item.id}')">✏️ 编辑</button>
+                        <button class="action-btn del" style="padding:4px 8px; border-radius:6px;" onclick="deleteWork('${item.id}', '${safeFileKey}')">🗑 删除</button>
+                    </div>
+                `;
+            }
+
+            html += `
+                <div class="work-item">
+                    ${headerHtml}
+                    <div class="work-info-box">
+                        <div class="work-title" title="${safeTitle}">${safeTitle}</div>
+                        <div class="work-desc">${safeDesc}</div>
+                        <div class="work-meta-row">
+                            <span>${sizeStr}</span>
+                            <span>${timeStr}</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+                            <button class="btn-download" style="padding:6px 12px; border-radius:6px; background:var(--theme-accent-soft); border:1px solid var(--theme-accent-border); color:var(--theme-accent); cursor:pointer;" onclick="downloadWork('${safeFileKey}', '${safeFileName}')">下载</button>
+                            ${manageBtns}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    });
+}
+
+var fileInput = document.getElementById('myWorkFileInput');
+if (fileInput) {
+    fileInput.addEventListener('change', function (e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 50 * 1024 * 1024) { alert('文件不能超过 50MB'); this.value = ''; return; }
+        
+        if (!cosReady || !cos) {
+            alert('云端存储未连接，无法上传！');
+            this.value = '';
+            return;
+        }
+
+        var progressBar = document.getElementById('uploadProgressBar');
+        var progressInner = document.getElementById('uploadProgressInner');
+        progressBar.style.display = 'block';
+        progressInner.style.width = '0%';
+
+        var fileExt = file.name.split('.').pop();
+        var fileName = Date.now() + '_' + Math.floor(Math.random() * 10000) + '.' + fileExt;
+        var fileKey = 'works/' + currentUser.id + '/' + fileName;
+
+        cos.putObject({
+            Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey, Body: file,
+            onProgress: function (info) {
+                progressInner.style.width = Math.floor(info.percent * 100) + '%';
+            }
+        }, function (err, data) {
+            progressBar.style.display = 'none';
+            fileInput.value = '';
+
+            if (err) { alert('上传失败：' + err.message); return; }
+
+            tempWorkFile = { fileKey: fileKey, file_name: file.name, file_size: file.size };
+            openWorkEditModal(null);
+        });
+    });
+}
+
+window.editWork = function(id) {
+    supabaseClient.from('user_works').select('*').eq('id', id).maybeSingle().then(function(res) {
+        if (res.data) {
+            openWorkEditModal(res.data);
+        }
+    });
+}
+
+function openWorkEditModal(workData) {
+    currentEditWorkId = workData ? workData.id : null;
+    tempCoverUrl = workData && workData.cover_url ? workData.cover_url : '';
+    tempCoverFileKey = '';
+
+    document.getElementById('workEditTitle').value = workData ? (workData.title || workData.file_name) : tempWorkFile.file_name;
+    document.getElementById('workEditDesc').value = workData ? (workData.description || '') : '';
+    
+    var preview = document.getElementById('workCoverPreview');
+    if (tempCoverUrl) {
+        preview.innerHTML = `<img src="${tempCoverUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+    } else {
+        preview.innerHTML = '🖼️';
+    }
+
+    document.getElementById('workEditModal').style.display = 'flex';
+}
+
+document.getElementById('uploadCoverBtn').addEventListener('click', function() {
+    document.getElementById('workCoverInput').click();
+});
+
+document.getElementById('workCoverInput').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    if (!cosReady || !cos) { alert('云端未连接，无法上传封面'); return; }
+    
+    var btn = document.getElementById('uploadCoverBtn');
+    btn.disabled = true;
+    btn.textContent = '上传中...';
+
+    var fileExt = file.name.split('.').pop();
+    var fileKey = 'covers/' + currentUser.id + '/' + Date.now() + '.' + fileExt;
+
+    cos.putObject({
+        Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey, Body: file
+    }, function(err, data) {
+        btn.disabled = false;
+        btn.textContent = '上传封面图';
+        this.value = '';
+        if (err) { alert('封面上传失败：' + err.message); return; }
+        
+        tempCoverFileKey = fileKey;
+        tempCoverUrl = `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${fileKey}`;
+        
+        document.getElementById('workCoverPreview').innerHTML = `<img src="${tempCoverUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+    });
+});
+
+document.getElementById('workEditSaveBtn').addEventListener('click', function() {
+    var title = document.getElementById('workEditTitle').value.trim();
+    if (!title) { alert('请输入作品标题'); return; }
+
+    var desc = document.getElementById('workEditDesc').value.trim();
+    var btn = this;
+    btn.disabled = true;
+    btn.textContent = '保存中...';
+
+    var payload = {
+        title: title,
+        description: desc,
+        cover_url: tempCoverUrl
+    };
+
+    if (currentEditWorkId) {
+        supabaseClient.from('user_works').update(payload).eq('id', currentEditWorkId).then(function(res) {
+            btn.disabled = false;
+            btn.textContent = '保存作品';
+            if (res.error) { alert('保存失败：' + res.error.message); return; }
+            
+            document.getElementById('workEditModal').style.display = 'none';
+            tempCoverFileKey = '';
+            loadWorksList(currentCategoryList);
+        });
+    } else {
+        payload.user_id = currentUser.id;
+        payload.file_key = tempWorkFile.fileKey;
+        payload.file_name = tempWorkFile.file_name;
+        payload.file_size = tempWorkFile.file_size;
+        payload.category = 'myWorks';
+
+        supabaseClient.from('user_works').insert([payload]).then(function(res) {
+            btn.disabled = false;
+            btn.textContent = '保存作品';
+            if (res.error) { alert('保存失败：' + res.error.message); return; }
+            
+            document.getElementById('workEditModal').style.display = 'none';
+            tempWorkFile = null;
+            tempCoverUrl = '';
+            tempCoverFileKey = '';
+            loadWorksList('myWorks');
+        });
+    }
+});
+
+document.getElementById('workEditCancelBtn').addEventListener('click', function() {
+    document.getElementById('workEditModal').style.display = 'none';
+    
+    if (tempWorkFile && !currentEditWorkId && cosReady && cos) {
+        cos.deleteObject({ Bucket: COS_BUCKET, Region: COS_REGION, Key: tempWorkFile.fileKey });
+    }
+    
+    if (tempCoverFileKey && cosReady && cos) {
+        cos.deleteObject({ Bucket: COS_BUCKET, Region: COS_REGION, Key: tempCoverFileKey });
+    }
+    
+    tempWorkFile = null;
+    tempCoverFileKey = '';
+});
+
+window.downloadWork = function(fileKey, fileName) {
+    if (!cosReady || !cos) return;
+    cos.getObjectUrl({
+        Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey, Sign: true, Expires: 3600
+    }, function (err, data) {
+        if (err) { alert('获取下载链接失败：' + err.message); return; }
+        var a = document.createElement('a');
+        a.href = data.Url;
+        a.download = fileName;
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    });
+};
+
+window.deleteWork = function(dbId, fileKey) {
+    if (!confirm('确定要永久删除这个作品吗？此操作不可恢复！')) return;
+    if (!cosReady || !cos) return;
+
+    cos.deleteObject({
+        Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey
+    }, function (err, data) {
+        if (err) { alert('云端文件删除失败：' + err.message); return; }
+        supabaseClient.from('user_works').delete().eq('id', dbId).then(function (dbRes) {
+            if (dbRes.error) { alert('记录删除失败：' + dbRes.error.message); } 
+            else { loadWorksList(currentCategoryList); }
+        });
+    });
+};
 
 /* ============================================================
  *  用户端成就系统

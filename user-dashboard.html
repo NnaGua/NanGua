@@ -97,43 +97,61 @@
             </div>
         </div>
 
-        <nav class="nav-menu">
+                <nav class="nav-menu">
             <div class="nav-item active" data-tab="home" id="homeNavItem">
                 <span class="nav-text" data-i18n="userDash.navHome">🏠 我的主页</span>
                 <span class="nav-arrow" id="profileArrow" title="展开 / 收起资料">▾</span>
             </div>
-
-            <div class="nav-group" id="msgGroup" data-group="msg">
-                <span class="nav-text" data-i18n="userDash.navMsg">📬 消息通知</span>
-                <span class="nav-arrow" id="msgArrow">▾</span>
+            <!-- 狼爸作品 -->
+            <div class="nav-group" data-group="wolfDad">
+                <span class="nav-text">🐺 狼爸作品</span>
+                <span class="nav-arrow">▾</span>
             </div>
-            <div class="nav-sub" id="msgSub" data-sub="msg">
+            <div class="nav-sub" data-sub="wolfDad">
+                <div class="nav-sub-item" data-tab="publicWorks">🌍 公众作品</div>
+                <div class="nav-sub-item" data-tab="excellentWorks">🌟 优秀作品</div>
+                <div class="nav-sub-item" data-tab="myWorks">📁 个人作品</div>
+                <div class="nav-sub-item" data-tab="favWorks">💖 收藏作品</div>
+            </div>
+            
+            <!-- 消息通知 -->
+            <div class="nav-group" data-group="msg">
+                <span class="nav-text" data-i18n="userDash.navMsg">📬 消息通知</span>
+                <span class="nav-arrow">▾</span>
+            </div>
+            <div class="nav-sub" data-sub="msg">
                 <div class="nav-sub-item" data-tab="announce" data-i18n="userDash.navAnnounce">📢 公告栏</div>
                 <div class="nav-sub-item" data-tab="wall" data-i18n="wall.navWall">🌊 动态墙</div>
             </div>
 
-            <div class="nav-item" data-tab="checkin">
-                <span class="nav-text" data-i18n="userDash.navCheckin">📅 每日签到</span>
+            <!-- 个人中心 -->
+            <div class="nav-group" data-group="personal">
+                <span class="nav-text">👤 个人中心</span>
+                <span class="nav-arrow">▾</span>
+            </div>
+            <div class="nav-sub" data-sub="personal">
+                <div class="nav-sub-item" data-tab="achievements" data-i18n="userDash.navAchievements">🏆 我的成就</div>
+                <div class="nav-sub-item" data-tab="friends" data-i18n="userDash.navFriends">👥 我的好友</div>
             </div>
 
-            <div class="nav-item" data-tab="achievements">
-                <span class="nav-text" data-i18n="userDash.navAchievements">🏆 我的成就</span>
+            <!-- 积分管理 -->
+            <div class="nav-group" data-group="points">
+                <span class="nav-text">💎 积分管理</span>
+                <span class="nav-arrow">▾</span>
+            </div>
+            <div class="nav-sub" data-sub="points">
+                <div class="nav-sub-item" data-tab="shop" data-i18n="userDash.navShop">🛒 积分商城</div>
+                <div class="nav-sub-item" data-tab="checkin" data-i18n="userDash.navCheckin">📅 每日签到</div>
             </div>
 
-            <div class="nav-item" data-tab="shop">
-                <span class="nav-text" data-i18n="userDash.navShop">🛒 积分商城</span>
+            <!-- 设置 -->
+            <div class="nav-group" data-group="settings">
+                <span class="nav-text">⚙️ 设置</span>
+                <span class="nav-arrow">▾</span>
             </div>
-
-            <div class="nav-item" data-tab="friends">
-                <span class="nav-text" data-i18n="userDash.navFriends">👥 我的好友</span>
-            </div>
-
-            <div class="nav-item" data-tab="theme">
-                <span class="nav-text" data-i18n="userDash.navTheme">🎨 外观设置</span>
-            </div>
-
-            <div class="nav-item" data-tab="feedback">
-                <span class="nav-text" data-i18n="userDash.navFeedback">📝 使用反馈</span>
+            <div class="nav-sub" data-sub="settings">
+                <div class="nav-sub-item" data-tab="theme" data-i18n="userDash.navTheme">🎨 外观设置</div>
+                <div class="nav-sub-item" data-tab="feedback" data-i18n="userDash.navFeedback">📝 使用反馈</div>
             </div>
         </nav>
     </aside>
@@ -144,7 +162,7 @@
             <div class="card active" id="cardHome">
                 <div class="welcome-card">
                     <img id="welcomeAvatar" class="welcome-avatar"
-                         src="image/default-avatar.png" alt="头像">
+                    src="image/default-avatar.png" alt="头像">
                     <div class="welcome-title" id="welcomeTitle" data-i18n="userDash.homeWelcome">欢迎回来</div>
                     <div class="welcome-hint" id="welcomeBio" data-i18n="userDash.homeBioDefault">这里是你的个人主页</div>
                 </div>
@@ -187,6 +205,64 @@
                     </div>
                 </div>
             </div>
+<!-- 公众作品 -->
+<div class="card card-works" id="cardPublicWorks">
+    <div class="card-head">
+        <h2>🌍 公众作品</h2>
+        <span class="badge">全部公开作品</span>
+    </div>
+    <div class="works-grid" id="publicWorksList">
+        <div class="empty-state" data-i18n="common.loading">加载中...</div>
+    </div>
+</div>
+
+<!-- 优秀作品 -->
+<div class="card card-works" id="cardExcellentWorks">
+    <div class="card-head">
+        <h2>🌟 优秀作品</h2>
+        <span class="badge">精选推荐</span>
+    </div>
+    <div class="works-grid" id="excellentWorksList">
+        <div class="empty-state" data-i18n="common.loading">加载中...</div>
+    </div>
+</div>
+
+<!-- 个人作品 -->
+<div class="card card-works" id="cardMyWorks">
+    <div class="card-head">
+        <h2>📁 个人作品</h2>
+        <span class="badge">我发布的</span>
+    </div>
+
+    <!-- 上传区 -->
+    <div class="upload-area">
+        <input type="file" id="myWorkFileInput" style="display:none;" />
+        <label class="upload-btn" for="myWorkFileInput">
+            📤 上传作品
+        </label>
+        <span class="upload-hint">支持图片、视频、文档等，单个文件不超过 50MB</span>
+        <div class="upload-progress" id="uploadProgressBar" style="display:none;">
+            <div class="upload-progress-inner" id="uploadProgressInner"></div>
+        </div>
+    </div>
+
+    <!-- 作品列表 -->
+    <div class="works-grid" id="myWorksList">
+        <div class="empty-state" data-i18n="common.loading">加载中...</div>
+    </div>
+</div>
+
+<!-- 收藏作品 -->
+<div class="card" id="cardFavWorks">
+    <div class="card-head">
+        <h2>💖 收藏作品</h2>
+        <span class="badge">我的收藏</span>
+    </div>
+    <div class="works-grid" id="favWorksList">
+        <div class="empty-state" data-i18n="common.loading">加载中...</div>
+    </div>
+</div>
+            
 
             <div class="card" id="cardAnnounce">
                 <div class="card-head">
@@ -206,8 +282,8 @@
                 </div>
                 <div class="wall-publish">
                     <textarea id="wallPublishInput"
-                              data-i18n-placeholder="wall.publishPlaceholder"
-                              placeholder="分享你的此刻..." maxlength="500"></textarea>
+                    data-i18n-placeholder="wall.publishPlaceholder"
+                    placeholder="分享你的此刻..." maxlength="500"></textarea>
                     <div class="wall-publish-row">
                         <label class="wall-anon-toggle">
                             <input type="checkbox" id="wallPublishAnon">
@@ -479,6 +555,7 @@
         </div>
     </div>
 
+<script src="https://unpkg.com/cos-js-sdk-v5/dist/cos-js-sdk-v5.min.js"></script>
 <script src="other/user-dashboard.js"></script>
 <script src="other/theme.js"></script>
 <script src="other/sound.js"></script>

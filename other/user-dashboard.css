@@ -1,7 +1,7 @@
 @charset "utf-8";
 
 /* ============================================================
-   user-dashboard.html 专属样式
+user-dashboard.html 专属样式
    ============================================================ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -9,7 +9,7 @@ html, body { height: 100%; }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto,
-                 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     background: linear-gradient(160deg, var(--theme-bg-start) 0%, var(--theme-bg-end) 100%);
     background-attachment: fixed;
     color: var(--theme-text);
@@ -1790,4 +1790,145 @@ body {
         color: var(--theme-accent);
         transform: scale(.96);
     }
+}
+/* ============================================================
+狼爸作品页 · 去边框化（取消悬浮大框）
+   ============================================================ */
+.card.card-works {
+    background: transparent; /* 去除深色背景 */
+    border: none;            /* 去除边框 */
+    box-shadow: none;        /* 去除阴影 */
+    padding: 0;              /* 去除自带的超大内边距，让内容更靠边 */
+    max-width: 100%;         /* 释放宽度限制，让内容铺开 */
+    margin-bottom: var(--space-5);
+}
+
+/* 调整标题栏，去掉底部横线，更轻盈 */
+.card.card-works .card-head {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: var(--space-5);
+    padding-left: var(--space-2); /* 稍微留点边距和内容对齐 */
+    padding-right: var(--space-2);
+}
+
+/* 优化空状态的样式，去掉那种“陷进去”的方块感 */
+.card.card-works .empty-state {
+    background: transparent;
+    border: 1px dashed var(--theme-border); /* 如果完全不要框，删掉这行即可 */
+    border-radius: var(--radius-lg);
+    padding: var(--space-8) 0;
+}
+/* ============================================================
+   作品管理 · 深度优化
+   ============================================================ */
+.upload-area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-3);
+    padding: var(--space-6) var(--space-4);
+    margin-bottom: var(--space-6);
+    background: var(--theme-info-box);
+    border: 2px dashed var(--theme-border);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-base);
+}
+.upload-area:hover {
+    border-color: var(--theme-accent-border);
+}
+
+.upload-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 24px;
+    background: var(--theme-accent-soft);
+    border: 1px solid var(--theme-accent-border);
+    color: var(--theme-accent);
+    border-radius: var(--radius-full);
+    font-size: 0.95em;
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    transition: all var(--transition-base);
+}
+.upload-btn:hover {
+    border-color: var(--theme-accent);
+    box-shadow: 0 0 0 6px var(--theme-accent-soft);
+}
+
+.upload-hint {
+    font-size: 0.8em;
+    color: var(--theme-text-faint);
+}
+
+/* 作品卡片强化 */
+.work-item {
+    position: relative;
+    padding: 0; /* 改为0，让封面顶满 */
+    overflow: hidden;
+    align-items: stretch;
+}
+
+/* 如果有封面图 */
+.work-cover {
+    width: 100%;
+    height: 120px;
+    object-fit: cover;
+    background: var(--theme-border-soft);
+    border-bottom: 1px solid var(--theme-border-soft);
+}
+
+/* 如果没有封面图，显示的默认图标 */
+.work-icon {
+    width: 100%;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3em;
+    background: var(--theme-info-box);
+    border-bottom: 1px solid var(--theme-border-soft);
+}
+
+.work-info-box {
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.work-title {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--theme-text);
+    margin-bottom: 4px;
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.work-desc {
+    font-size: 0.78em;
+    color: var(--theme-text-dim);
+    margin-bottom: 12px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    min-height: 2.4em;
+}
+
+.work-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75em;
+    color: var(--theme-text-faint);
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px dashed var(--theme-border-soft);
 }
