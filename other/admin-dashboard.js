@@ -32,30 +32,13 @@ window.__adLangChanged = applyLang;
 
     function isMobile() { return window.innerWidth <= 768; }
 
-    /* 4 个主按钮 → 每个按钮收纳的 tab 集合 */
     var TABBAR_GROUPS = [
-    {
-        key: 'msg', icon: '📬', label: '消息',
-        tabs: ['announce', 'forgot', 'feedback']
-    },
-    {
-        key: 'points', icon: '📊', label: '积分',
-        tabs: ['points', 'pointLogs', 'shop', 'purchases', 'achievements']
-    },
-    {
-        key: 'users', icon: '👥', label: '用户',
-        // ★ 把 machineCodes 加到"用户"分组
-        tabs: ['profiles', 'manage', 'machineCodes', 'myCheckin', 'myFriends']
-    },
-    {
-        key: 'system', icon: '⚙️', label: '系统',
-        // ★ 把 sysConfig 加到"系统"分组
-        tabs: [
-            'aiDecisions', 'aiConfig', 'aiWordlist', 'wallPosts',
-            'aiTrust', 'aiCost', 'server', 'theme', 'sound', 'sysConfig'
-        ]
-    }
-];
+        { key: 'msg', icon: '📬', label: '消息', tabs: ['announce', 'forgot', 'feedback'] },
+        { key: 'points', icon: '📊', label: '积分', tabs: ['points', 'pointLogs', 'shop', 'purchases', 'achievements'] },
+        { key: 'users', icon: '👥', label: '用户', tabs: ['profiles', 'manage', 'machineCodes', 'myCheckin', 'myFriends'] },
+        { key: 'system', icon: '⚙️', label: '系统', tabs: ['aiDecisions', 'aiConfig', 'aiWordlist', 'wallPosts', 'aiTrust', 'aiCost', 'server', 'theme', 'sound', 'sysConfig'] }
+    ];
+    
     var tabbarEl = null;
     var submenuEl = null;
     var activeGroupKey = null;
@@ -73,9 +56,8 @@ window.__adLangChanged = applyLang;
             btn.type = 'button';
             btn.className = 'mobile-tabbar-btn';
             btn.setAttribute('data-group', g.key);
-            btn.innerHTML =
-                '<span class="tabbar-icon">' + g.icon + '</span>' +
-                '<span class="tabbar-label">' + g.label + '</span>';
+            btn.innerHTML = '<span class="tabbar-icon">' + g.icon + '</span>' +
+                            '<span class="tabbar-label">' + g.label + '</span>';
             btn.addEventListener('click', function (e) {
                 e.stopPropagation();
                 toggleGroup(g.key);
@@ -91,6 +73,10 @@ window.__adLangChanged = applyLang;
         document.body.appendChild(tabbarEl);
         document.body.appendChild(submenuEl);
         document.body.classList.add('has-mobile-tabbar');
+        
+        // ★ 隐藏旧导航条
+        var navMenu = document.querySelector('.nav-menu');
+        if (navMenu) navMenu.style.display = 'none';
     }
 
     function destroy() {
@@ -100,6 +86,10 @@ window.__adLangChanged = applyLang;
         submenuEl = null;
         activeGroupKey = null;
         document.body.classList.remove('has-mobile-tabbar');
+        
+        // ★ 恢复旧导航条（防止电脑端缩放窗口时导航条消失）
+        var navMenu = document.querySelector('.nav-menu');
+        if (navMenu) navMenu.style.display = '';
     }
 
     function toggleGroup(key) {
@@ -113,7 +103,6 @@ window.__adLangChanged = applyLang;
         var group = TABBAR_GROUPS.filter(function (g) { return g.key === key; })[0];
         if (!group) return;
 
-        /* 复用侧边栏里的文案，避免再造一份翻译 */
         var nav = document.querySelector('.nav-menu');
         var html = '';
         group.tabs.forEach(function (tabName) {
@@ -145,7 +134,6 @@ window.__adLangChanged = applyLang;
         }
     }
 
-    /* 外部调用：切 tab 时高亮对应主按钮 */
     function syncActiveTab(tabName) {
         if (!tabbarEl) return;
         var group = TABBAR_GROUPS.filter(function (g) {
@@ -176,8 +164,7 @@ window.__adLangChanged = applyLang;
         });
 
         document.addEventListener('click', function (e) {
-            if (!e.target.closest('.mobile-tabbar') &&
-                !e.target.closest('.mobile-submenu')) {
+            if (!e.target.closest('.mobile-tabbar') && !e.target.closest('.mobile-submenu')) {
                 closeSubmenu();
             }
         });
@@ -203,7 +190,7 @@ var currentPointsUserId = null;
 var currentEditShopId = null;
 var selectedProfileIds = []; 
 var currentEditAchId = null; 
-var currentGrantAchId = null; // ★ 新增：当前要发放的成就ID
+var currentGrantAchId = null;
 
 var myFriendsCache = [];
 var myCurrentChatFriend = null;
@@ -300,7 +287,6 @@ var CARDS = {
     myCheckin: 'cardMyCheckin',
     myFriends: 'cardMyFriends',
     feedback:  'cardFeedback',
-    /* ★ 动态墙 */
     aiDecisions: 'cardAiDecisions',
     aiConfig:    'cardAiConfig',
     aiWordlist:  'cardAiWordlist',
@@ -330,7 +316,7 @@ function switchTab(tab) {
     if (tab === 'points')    loadPoints();
     if (tab === 'pointLogs') loadAllPointLogs();
     if (tab === 'forgot')    loadForgotRequests();
-    if (tab === 'achievements') loadAchievements(); // ★ 新增
+    if (tab === 'achievements') loadAchievements();
     if (tab === 'profiles')  loadProfiles();
     if (tab === 'server')    loadServerInfo();
     if (tab === 'shop')      loadAdminShop();
@@ -342,7 +328,7 @@ function switchTab(tab) {
         try { window.adminWallLoaders[tab](); } catch (e) { console.warn(e); }
     }
 
-        if (window.syncMobileTabbar) {
+    if (window.syncMobileTabbar) {
         window.syncMobileTabbar(tab);
     }
 }
@@ -1244,8 +1230,9 @@ document.getElementById('refreshForgotBtn').addEventListener('click', function (
     loadForgotRequests();
     setTimeout(function () { btn.disabled = false; btn.classList.remove('spinning'); }, 500);
 });
+
 /* ============================================================
- *  ★ 新增：成就系统管理（含单独发放）
+ *  成就系统管理
  * ============================================================ */
 function loadAchievements() {
     var body = document.getElementById('achievementsBody');
@@ -1303,7 +1290,6 @@ function loadAchievements() {
             });
             body.innerHTML = html;
 
-            // 绑定编辑按钮
             body.querySelectorAll('.ach-edit-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     var id = this.getAttribute('data-id');
@@ -1312,7 +1298,6 @@ function loadAchievements() {
                 });
             });
 
-            // 绑定发放按钮
             body.querySelectorAll('.ach-grant-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     var id = this.getAttribute('data-id');
@@ -1321,7 +1306,6 @@ function loadAchievements() {
                 });
             });
 
-            // 绑定删除按钮
             body.querySelectorAll('.ach-del-btn').forEach(function (btn) {
                 btn.addEventListener('click', function () {
                     var id = this.getAttribute('data-id');
@@ -1336,7 +1320,6 @@ function loadAchievements() {
         });
 }
 
-// 刷新按钮
 document.getElementById('refreshAchievementsBtn').addEventListener('click', function () {
     var btn = this;
     btn.disabled = true;
@@ -1345,7 +1328,6 @@ document.getElementById('refreshAchievementsBtn').addEventListener('click', func
     setTimeout(function () { btn.disabled = false; btn.classList.remove('spinning'); }, 500);
 });
 
-// 添加成就
 document.getElementById('addAchievementBtn').addEventListener('click', function () {
     var name = document.getElementById('achName').value.trim();
     if (!name) { alert('请填写成就名称'); return; }
@@ -1370,7 +1352,6 @@ document.getElementById('addAchievementBtn').addEventListener('click', function 
         btn.textContent = '➕ 保存成就';
         if (res.error) { alert('添加失败：' + res.error.message); return; }
 
-        // 清空表单
         document.getElementById('achName').value = '';
         document.getElementById('achDesc').value = '';
         document.getElementById('achIcon').value = '🏆';
@@ -1384,7 +1365,6 @@ document.getElementById('addAchievementBtn').addEventListener('click', function 
     });
 });
 
-// 打开编辑弹窗
 function openEditAchievementModal(item) {
     currentEditAchId = item.id;
     document.getElementById('editAchName').value = item.name || '';
@@ -1399,7 +1379,6 @@ function openEditAchievementModal(item) {
     document.getElementById('editAchievementModal').style.display = 'flex';
 }
 
-// 关闭编辑弹窗
 function closeEditAchievementModal() {
     document.getElementById('editAchievementModal').style.display = 'none';
     currentEditAchId = null;
@@ -1410,7 +1389,6 @@ document.getElementById('editAchievementModal').addEventListener('click', functi
     if (e.target === this) closeEditAchievementModal();
 });
 
-// 保存编辑
 document.getElementById('editAchSaveBtn').addEventListener('click', function () {
     if (!currentEditAchId) return;
     var name = document.getElementById('editAchName').value.trim();
@@ -1442,9 +1420,6 @@ document.getElementById('editAchSaveBtn').addEventListener('click', function () 
     });
 });
 
-/* ============================================================
- *  单独发放成就给指定用户（★ 新增）
- * ============================================================ */
 function openGrantAchievementModal(achItem) {
     currentGrantAchId = achItem.id;
     document.getElementById('grantAchNameHint').innerHTML = '成就：<strong>' + escapeHtml(achItem.name) + '</strong>（+' + (achItem.reward_points || 0) + ' 积分）';
@@ -1453,7 +1428,6 @@ function openGrantAchievementModal(achItem) {
     selectEl.innerHTML = '<option value="">加载用户中...</option>';
     document.getElementById('grantAchievementModal').style.display = 'flex';
 
-    // 如果之前已经加载过用户列表（allProfiles），直接用，否则重新查
     if (allProfiles && allProfiles.length > 0) {
         renderGrantUserOptions(allProfiles);
     } else {
@@ -1500,13 +1474,11 @@ document.getElementById('grantAchConfirmBtn').addEventListener('click', function
     btn.disabled = true;
     btn.textContent = '发放中...';
 
-    // 1. 先获取成就的详细信息（积分等）
     supabaseClient.from('achievements').select('*').eq('id', currentGrantAchId).maybeSingle()
     .then(function(achRes) {
         if (achRes.error || !achRes.data) throw new Error('获取成就信息失败');
         var ach = achRes.data;
 
-        // 2. 检查该用户是否已经拥有这个成就
         return supabaseClient.from('user_achievements')
             .select('id')
             .eq('user_id', targetUserId)
@@ -1517,7 +1489,6 @@ document.getElementById('grantAchConfirmBtn').addEventListener('click', function
                     throw new Error('该用户已经拥有此成就，无需重复发放');
                 }
 
-                // 3. 插入用户成就记录
                 return supabaseClient.from('user_achievements').insert([{
                     user_id: targetUserId,
                     achievement_id: ach.id
@@ -1528,7 +1499,6 @@ document.getElementById('grantAchConfirmBtn').addEventListener('click', function
             });
     })
     .then(function(ach) {
-        // 4. 如果成就有奖励积分，给用户加分并写明细
         if (ach.reward_points > 0) {
             return supabaseClient.from('profiles').select('points').eq('id', targetUserId).maybeSingle()
                 .then(function(pRes) {
@@ -1537,13 +1507,7 @@ document.getElementById('grantAchConfirmBtn').addEventListener('click', function
 
                     return supabaseClient.from('profiles').update({ points: newPoints }).eq('id', targetUserId)
                         .then(function() {
-                            // 写入积分日志
-                            return writePointLog(
-                                targetUserId, 
-                                ach.reward_points, 
-                                '管理员发放成就：' + ach.name, 
-                                newPoints
-                            );
+                            return writePointLog(targetUserId, ach.reward_points, '管理员发放成就：' + ach.name, newPoints);
                         });
                 });
         }
@@ -1634,9 +1598,6 @@ document.getElementById('refreshProfilesBtn').addEventListener('click', function
     setTimeout(function () { btn.disabled = false; btn.classList.remove('spinning'); }, 500);
 });
 
-/* ============================================================
- *  批量选择与操作逻辑
- * ============================================================ */
 function bindProfilesSelectionEvents() {
     var selectAll = document.getElementById('profilesSelectAll');
     var checkboxes = document.querySelectorAll('.profile-checkbox');
@@ -1679,7 +1640,6 @@ function updateProfilesSelection() {
     }
 }
 
-// 批量删除
 document.getElementById('profilesBatchDeleteBtn').addEventListener('click', function () {
     if (selectedProfileIds.length === 0) return;
     if (!confirm('⚠️ 确定要彻底删除选中的 ' + selectedProfileIds.length + ' 个用户吗？此操作不可恢复！')) return;
@@ -1711,7 +1671,6 @@ document.getElementById('profilesBatchDeleteBtn').addEventListener('click', func
     });
 });
 
-// 批量拉黑（打开弹窗）
 document.getElementById('profilesBatchBlockBtn').addEventListener('click', function () {
     if (selectedProfileIds.length === 0) return;
     currentBanUserIds = selectedProfileIds.slice();
@@ -1722,9 +1681,6 @@ document.getElementById('profilesBatchBlockBtn').addEventListener('click', funct
     document.getElementById('banDurationModal').style.display = 'flex';
 });
 
-/* ============================================================
- *  用户列表单行操作绑定
- * ============================================================ */
 function bindProfileActions() {
     var body = document.getElementById('profilesBody');
     if (!body) return;
@@ -2919,12 +2875,10 @@ document.getElementById('myChatInput').addEventListener('keydown', function (e) 
  *  动态语言刷新
  * ============================================================ */
 function refreshDynamicText() {
-    // 1. 应用语言到所有 data-i18n 标签
     if (window.LangHelper && window.LangHelper.apply) {
         window.LangHelper.apply();
     }
 
-    // 2. 刷新当前激活的卡片内容（异步重新加载数据，让动态文本也变语言）
     try {
         var cards = {
             'cardAnnounce':     loadAnnouncements,
@@ -2936,13 +2890,10 @@ function refreshDynamicText() {
             'cardShop':         loadAdminShop,
             'cardPurchases':    loadPurchases,
             'cardFeedback':     loadAllFeedbacks,
-            // ★ 你新加的两张卡片
             'cardMachineCodes': loadMachineCodes,
             'cardSysConfig':    loadSysConfig,
-            // 我的签到 / 好友
             'cardMyCheckin':    function () { myRefreshCheckinUI(); myLoadCheckinCalendar(); },
             'cardMyFriends':    myLoadFriends,
-            // 动态墙
             'cardAiDecisions':  function () { window.adminWallLoaders && window.adminWallLoaders.aiDecisions(); },
             'cardAiConfig':     function () { window.adminWallLoaders && window.adminWallLoaders.aiConfig(); },
             'cardAiWordlist':   function () { window.adminWallLoaders && window.adminWallLoaders.aiWordlist(); },
@@ -2951,7 +2902,6 @@ function refreshDynamicText() {
             'cardAiCost':       function () { window.adminWallLoaders && window.adminWallLoaders.aiCost(); }
         };
 
-        // ★ 只刷新当前激活的卡片，避免无谓的请求
         Object.keys(cards).forEach(function (id) {
             var el = document.getElementById(id);
             if (el && el.classList.contains('active')) {
@@ -2970,6 +2920,7 @@ window.refreshDynamicText = refreshDynamicText;
 document.addEventListener('DOMContentLoaded', function () {
     setTimeout(applyLang, 100);
 });
+
 /* ============================================================
  *  机器码管理逻辑
  * ============================================================ */
@@ -2992,7 +2943,6 @@ function loadMachineCodes() {
                 return;
             }
 
-            // 如果有 user_id，去查一下对应的 profiles 拿邮箱和昵称
             var userIds = data.filter(function(d) { return d.user_id; }).map(function(d) { return d.user_id; });
             
             var fetchProfiles = userIds.length > 0 
@@ -3046,7 +2996,6 @@ function loadMachineCodes() {
                 });
                 body.innerHTML = html;
 
-                // 绑定按钮事件
                 body.querySelectorAll('.mc-del-btn').forEach(function(btn) {
                     btn.onclick = function() {
                         var mid = this.getAttribute('data-id');
@@ -3076,7 +3025,7 @@ function loadMachineCodes() {
                     btn.onclick = function() {
                         var mid = this.getAttribute('data-id');
                         supabaseClient.from('machine_codes').update({ 
-                            trial_expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(), // 重新给3天
+                            trial_expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
                             is_infinite_trial: false,
                             updated_at: new Date().toISOString()
                         }).eq('machine_id', mid).then(function(r) {
@@ -3090,7 +3039,6 @@ function loadMachineCodes() {
         });
 }
 
-// 刷新按钮
 document.getElementById('refreshMachineCodesBtn').onclick = function() {
     var btn = this;
     btn.classList.add('spinning');
@@ -3101,7 +3049,6 @@ document.getElementById('refreshMachineCodesBtn').onclick = function() {
         });
 };
 
-// 一键全部无限试用
 document.getElementById('machineBatchInfiniteBtn').onclick = function() {
     if (!confirm('确定要一键让所有机器码无限试用吗？')) return;
     supabaseClient.from('machine_codes').update({ 
@@ -3115,12 +3062,11 @@ document.getElementById('machineBatchInfiniteBtn').onclick = function() {
     });
 };
 
-// 一键全部关闭试用
 document.getElementById('machineBatchCloseBtn').onclick = function() {
     if (!confirm('确定要一键关闭所有机器码的试用吗？')) return;
     supabaseClient.from('machine_codes').update({ 
         is_infinite_trial: false,
-        trial_expires_at: new Date().toISOString(), // 立即过期
+        trial_expires_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
     }).neq('machine_id', '').then(function(r) {
         if (r.error) { alert('操作失败：' + r.error.message); return; }
@@ -3128,7 +3074,6 @@ document.getElementById('machineBatchCloseBtn').onclick = function() {
         loadMachineCodes();
     });
 };
-
 
 /* ============================================================
  *  系统配置逻辑（禁止普通用户登录开关）
@@ -3138,7 +3083,6 @@ function loadSysConfig() {
         .then(function(res) {
             var toggle = document.getElementById('toggleUserLogin');
             if (!toggle) return;
-            // 如果 allow_user_login 是 'false'，说明禁止登录（开关是打开的）
             var isBanned = (res.data && res.data.value === 'false');
             toggle.classList.toggle('active', isBanned);
             toggle.setAttribute('aria-pressed', isBanned ? 'true' : 'false');
@@ -3147,12 +3091,12 @@ function loadSysConfig() {
 
 document.getElementById('toggleUserLogin').onclick = function() {
     var isCurrentlyBanned = this.classList.contains('active');
-    var newValue = isCurrentlyBanned ? 'true' : 'false'; // 当前是禁止状态，要改成允许(true)
+    var newValue = isCurrentlyBanned ? 'true' : 'false';
 
     var actionText = isCurrentlyBanned ? '取消禁止登录' : '禁止普通用户登录';
     if (!confirm('确定要【' + actionText + '】吗？')) return;
 
-    supabaseClient.from('system_settings').update({ 
+    supabaseClient.from('system_settings').update({
         value: newValue,
         updated_at: new Date().toISOString()
     }).eq('key', 'allow_user_login').then(function(r) {

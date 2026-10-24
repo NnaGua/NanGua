@@ -1,6 +1,5 @@
 /* ============================================================
- *  ju-bounce.js · 虎 v2
- *  内嵌登录 · 排行榜 · 防刷分
+ *  ju-bounce.js
  * ============================================================ */
 (function () {
     'use strict';
@@ -77,13 +76,11 @@
      *  登录 / 退出 / 会话
      * ============================================================ */
     function updateAuthUI() {
-        // 右上角退出按钮：登录才显示
         if (logoutBtn) logoutBtn.style.display = currentUser ? '' : 'none';
-        // 弹窗底部登录区：未登录才显示
         if (lbLoginBox) lbLoginBox.style.display = currentUser ? 'none' : '';
     }
 
-    function loadUserAndScore() {
+        function loadUserAndScore() {
         var sb = getSb();
         if (!sb) return Promise.resolve();
 
@@ -98,6 +95,7 @@
             currentUser = s.user;
             updateAuthUI();
 
+            // ★ 改回独立的游戏分数表 jufufu_scores
             return sb.from('jufufu_scores')
                 .select('high_score')
                 .eq('user_id', currentUser.id)
@@ -123,39 +121,29 @@
         if (!sb || !currentUser) return Promise.resolve();
 
         return sb.rpc('jufufu_start_game').then(function (r) {
-            if (r.error || !r.data) {
-                console.warn('[ju-bounce] 创建会话失败:', r.error && r.error.message);
-                return;
-            }
+            if (r.error || !r.data) return;
             gameSessionId = r.data;
         });
     }
 
-    function submitScore(score) {
-        if (!currentUser || !gameSessionId) return;
+    function submitScore(currentTotalScore) {
+        if (!currentUser) return;
         clearTimeout(syncTimer);
+        // 防抖：1.5秒内多次撞击只向服务器请求一次
         syncTimer = setTimeout(function () {
             var sb = getSb();
             if (!sb) return;
 
-            sb.rpc('jufufu_submit_score', {
-                p_session_id: gameSessionId,
-                p_score: score
-            }).then(function (r) {
-                if (r.error) {
-                    console.warn('[ju-bounce] 提交失败:', r.error.message);
-                    return;
-                }
-                var data = r.data || {};
-                if (!data.ok) {
-                    console.warn('[ju-bounce] 分数被拒:', data.reason);
-                    showJuToast('⚠️ 分数异常，未计入排行榜', 'error');
-                    return;
-                }
-                remoteHighScore = data.new_high || score;
-                updateStats();
-            });
-        }, 800);
+            // ★ 改用 RPC 提交到独立的小游戏表，不再去碰 profiles 表
+            if (gameSessionId) {
+                sb.rpc('jufufu_submit_score', {
+                    p_session_id: gameSessionId,
+                    p_score: currentTotalScore
+                }).then(function(r) {
+                    if (r.error) console.warn('[ju-bounce] 分数提交失败:', r.error.message);
+                }).catch(function(){});
+            }
+        }, 1500);
     }
 
     /* ============================================================
@@ -250,15 +238,49 @@
             lbList.innerHTML = '<div id="ju-lb-empty">未连接服务器</div>';
             return;
         }
-        sb.rpc('get_jufufu_leaderboard', { p_limit: 20 }).then(function (r) {
-            if (r.error) {
-                lbList.innerHTML = '<div id="ju-lb-empty">加载失败：' + esc(r.error.message) + '</div>';
-                return;
-            }
-            renderLeaderboard(r.data || []);
-        }).catch(function () {
-            lbList.innerHTML = '<div id="ju-lb-empty">网络错误</div>';
-        });
+        
+        // 1. 先查询有分数的用户（排行榜数据表）
+        sb.from('jufufu_scores')
+            .select('user_id, high_score')
+            .order('high_score', { ascending: false })
+            .limit(20)
+            .then(function (r) {
+                if (r.error) {
+                    lbList.innerHTML = '<div id="ju-lb-empty">加载失败：' + esc(r.error.message) + '</div>';
+                    return;
+                }
+                
+                var scoresData = r.data || [];
+                if (scoresData.length === 0) {
+                    renderLeaderboard([]);
+                    return;
+                }
+
+                // 2. 提取 user_id 去查询 profiles 拿头像和名字
+                var uids = scoresData.map(function(x) { return x.user_id; });
+                sb.from('profiles')
+                    .select('id, full_name, email, avatar_url, uid')
+                    .in('id', uids)
+                    .then(function(pRes) {
+                        var profileMap = {};
+                        (pRes.data || []).forEach(function(p) { profileMap[p.id] = p; });
+
+                        // 3. 组合数据并渲染
+                        var rows = scoresData.map(function(item) {
+                            var p = profileMap[item.user_id] || {};
+                            return {
+                                user_id: item.user_id,
+                                full_name: p.full_name || p.email || '未命名用户',
+                                avatar_url: p.avatar_url,
+                                uid: p.uid,
+                                high_score: item.high_score || 0
+                            };
+                        });
+                        renderLeaderboard(rows);
+                    });
+            }).catch(function () {
+                lbList.innerHTML = '<div id="ju-lb-empty">网络错误</div>';
+            });
     }
 
     function renderLeaderboard(rows) {
@@ -475,7 +497,7 @@
         setSFXVolume(parseFloat(volumeSliderSFX.value));
     }
 
-        function applySize(scale) {
+    function applySize(scale) {
         scale = Math.max(0.2, Math.min(8, scale));
         jufufu.style.width = (CFG.size * scale) + 'px';
         sizeValue.textContent = scale.toFixed(1) + '×';
@@ -499,11 +521,24 @@
     /* ============================================================
      *  分数显示 / 物理循环
      * ============================================================ */
-    function updateStats() {
-        var best = Math.max(highScore, remoteHighScore);
-        var html = 'Bounces: ' + bounceCount + '<br>Corners Hit: ' + cornerHits;
-        if (cornerHits > 0 || best > 0) {
-            html += '<br>🏆 High Score: ' + best;
+    
+    // ★ 修改点：动态生成显示文本，未登录时显示 ****，并支持加分动画
+    function updateStats(addedPoints) {
+        var html = '';
+        if (!currentUser) {
+            html = 'Bounces: ****<br>' +
+                   'Corners Hit: 请登录<br>' +
+                   '🏆 High Score: 未知';
+        } else {
+            var best = Math.max(highScore, remoteHighScore);
+            // 如果本次有加分，动态生成一个带渐变消失动画的 +X
+            var plusHtml = addedPoints ? (' <span style="color:#e74c3c; font-weight:bold; font-size:1.1em; animation: juFadeUp 0.8s ease-out forwards;">+' + addedPoints + '</span>') : '';
+            
+            var bStr = 'Bounces: ' + bounceCount;
+            var hStr = 'Corners Hit: ' + cornerHits + plusHtml;
+            var hsStr = '🏆 High Score: ' + best + plusHtml;
+
+            html = bStr + '<br>' + hStr + '<br>' + hsStr;
         }
         statsBox.innerHTML = html;
     }
@@ -539,8 +574,7 @@
 
     function onBounce() {
         bounceCount++;
-        updateStats();
-
+        
         var randomFactor = function () { return (Math.random() - 0.5) * 1.5; };
         velX += randomFactor();
         velY += randomFactor();
@@ -559,35 +593,43 @@
 
         var now = Date.now();
         var timeSinceLastHit = now - lastCornerHitTime;
+        var addedPoints = 0;
 
         if (!nearCorner) {
             bounceSFX.currentTime = 0;
             bounceSFX.play().catch(function () {});
+            updateStats(0); // 普通反弹，无加分
         }
 
         if (nearCorner) {
-            var addedPoints = 1;
+            addedPoints = 1;
             if (timeSinceLastHit < 500) {
                 addedPoints = Math.random() < 0.3 ? 2 : 1;
             }
             cornerHits += addedPoints;
             lastCornerHitTime = now;
-            updateStats();
+
+            // ★ 修改点：如果用户登录了，这里的 High Score 同步加分
+            if (currentUser) {
+                highScore += addedPoints;
+                remoteHighScore += addedPoints; 
+            }
+
             cornerSFX.currentTime = 0;
             cornerSFX.play().catch(function () {});
 
             jufufu.style.filter = 'brightness(2)';
             setTimeout(function () { jufufu.style.filter = 'none'; }, 150);
 
-            var best = Math.max(highScore, remoteHighScore);
-            if (cornerHits > best) {
-                highScore = cornerHits;
-                try { localStorage.setItem(STORAGE_HIGHSCORE, String(highScore)); } catch (e) {}
+            statsBox.style.boxShadow = '0 0 10px gold';
+            setTimeout(function () { statsBox.style.boxShadow = 'none'; }, 500);
 
-                statsBox.style.boxShadow = '0 0 10px gold';
-                setTimeout(function () { statsBox.style.boxShadow = 'none'; }, 500);
+            // 更新界面并显示 +X
+            updateStats(addedPoints);
 
-                submitScore(cornerHits);
+            // 向服务器同步当前最新积分
+            if (currentUser) {
+                submitScore(highScore);
             }
         }
     }
@@ -696,12 +738,15 @@
             }
         });
 
-        // wiggle 动画
+        // wiggle 动画 + 加分动画样式注入
         setTimeout(function () {
             toggleBtn.style.animation = 'juWiggle 0.3s ease-in-out infinite alternate';
         }, 5000);
+        
         var style = document.createElement('style');
-        style.textContent = '@keyframes juWiggle { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }';
+        style.textContent = 
+            '@keyframes juWiggle { from { transform: rotate(-2deg); } to { transform: rotate(2deg); } }' +
+            '@keyframes juFadeUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-10px); } }';
         document.head.appendChild(style);
     }
 
@@ -733,9 +778,8 @@
         applySize(initScale);
 
         bindEvents();
-        updateStats();
+        updateStats(); // 初始化状态为空状态
 
-        
         loadUserAndScore();
 
         lastFrame = 0;

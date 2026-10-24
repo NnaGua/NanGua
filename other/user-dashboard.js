@@ -613,7 +613,7 @@ function loadAnnouncements() {
 }
 
 /* ============================================================
- * 作品管理模块 (Supabase Storage 终极版)
+ * 作品管理模块 (COS 终极合并版)
  * ============================================================ */
 var COS_BUCKET = 'wenjian-1486273443';
 var COS_REGION = 'ap-chongqing';
@@ -621,13 +621,12 @@ var cos = null;
 var cosReady = false;
 
 var currentCategoryList = 'myWorks';
-var tempWorkFile = null;
 var currentEditWorkId = null;
 var tempCoverUrl = '';
 var tempCoverFileKey = '';
 
 async function initCOS() {
-    var uploadBtn = document.querySelector('.upload-btn');
+    var uploadBtn = document.getElementById('openUploadModalBtn');
     if (uploadBtn) {
         uploadBtn.innerHTML = '<span style="font-size: 1.2em;">⏳</span> 正在连接云端...';
         uploadBtn.style.opacity = '0.6';
@@ -636,7 +635,16 @@ async function initCOS() {
 
     try {
         const { data, error } = await supabaseClient.functions.invoke('cos-sts');
-        if (error) throw error;
+        
+        if (error) {
+            if (error.context && typeof error.context.json === 'function') {
+                const body = await error.context.json();
+                console.error('Edge Function 返回详情:', body);
+                throw new Error(body.error || body.message || JSON.stringify(body));
+            }
+            throw error;
+        }
+
         if (!data || !data.credentials) throw new Error('未获取到有效秘钥');
 
         cos = new COS({
@@ -653,15 +661,15 @@ async function initCOS() {
         cosReady = true;
         
         if (uploadBtn) {
-            uploadBtn.innerHTML = '<span style="font-size: 1.2em;">📤</span> 上传新作品';
+            uploadBtn.innerHTML = '📤 上传新作品';
             uploadBtn.style.opacity = '1';
             uploadBtn.style.pointerEvents = 'auto';
         }
     } catch (err) {
         console.error('COS 初始化异常:', err);
         if (uploadBtn) {
-            var errMsg = err.message || (err.error && err.error.message) || '未知错误';
-            uploadBtn.innerHTML = '<span style="font-size: 1.2em;">❌</span> 失败: ' + errMsg;
+            var errMsg = err.message || '未知错误';
+            uploadBtn.innerHTML = '❌ 失败: ' + errMsg;
             uploadBtn.style.opacity = '0.8';
             uploadBtn.style.color = '#ff6b6b';
             uploadBtn.style.pointerEvents = 'none';
@@ -677,10 +685,15 @@ function loadWorksList(category) {
 
     container.innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
 
-    var query = supabaseClient.from('user_works').select('*').eq('category', category).order('created_at', { ascending: false });
+    var query = supabaseClient.from('user_works').select('*');
+    
+    // 个人作品查所有自己的，分类页面查对应的 category
     if (category === 'myWorks' || category === 'favWorks') {
         query = query.eq('user_id', currentUser.id);
+    } else {
+        query = query.eq('category', category);
     }
+    query = query.order('created_at', { ascending: false });
 
     query.then(function (res) {
         if (res.error) {
@@ -745,45 +758,180 @@ function loadWorksList(category) {
     });
 }
 
-var fileInput = document.getElementById('myWorkFileInput');
-if (fileInput) {
-    fileInput.addEventListener('change', function (e) {
-        var file = e.target.files[0];
-        if (!file) return;
-        if (file.size > 50 * 1024 * 1024) { alert('文件不能超过 50MB'); this.value = ''; return; }
-        
-        if (!cosReady || !cos) {
-            alert('云端存储未连接，无法上传！');
-            this.value = '';
-            return;
-        }
+/* ============================================================
+ * ★ 全新：作品上传弹窗逻辑
+ * ============================================================ */
+var uploadCoverFile = null;
+var uploadMainFile = null;
 
-        var progressBar = document.getElementById('uploadProgressBar');
-        var progressInner = document.getElementById('uploadProgressInner');
-        progressBar.style.display = 'block';
-        progressInner.style.width = '0%';
-
-        var fileExt = file.name.split('.').pop();
-        var fileName = Date.now() + '_' + Math.floor(Math.random() * 10000) + '.' + fileExt;
-        var fileKey = 'works/' + currentUser.id + '/' + fileName;
-
-        cos.putObject({
-            Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey, Body: file,
-            onProgress: function (info) {
-                progressInner.style.width = Math.floor(info.percent * 100) + '%';
-            }
-        }, function (err, data) {
-            progressBar.style.display = 'none';
-            fileInput.value = '';
-
-            if (err) { alert('上传失败：' + err.message); return; }
-
-            tempWorkFile = { fileKey: fileKey, file_name: file.name, file_size: file.size };
-            openWorkEditModal(null);
-        });
+// 打开弹窗
+var btnOpenUpload = document.getElementById('openUploadModalBtn');
+if (btnOpenUpload) {
+    btnOpenUpload.addEventListener('click', function() {
+        if (!cosReady || !cos) { alert('云端存储未连接，无法上传！请刷新重试。'); return; }
+        // 重置表单
+        document.getElementById('uploadWorkCategory').value = 'publicWorks';
+        document.getElementById('uploadWorkTitle').value = '';
+        document.getElementById('uploadWorkDesc').value = '';
+        document.getElementById('uploadMainFile').value = '';
+        document.getElementById('uploadCoverInput').value = '';
+        document.getElementById('uploadCoverPreview').innerHTML = '🖼️';
+        uploadCoverFile = null;
+        uploadMainFile = null;
+        document.getElementById('uploadWorkModal').style.display = 'flex';
     });
 }
 
+// 关闭弹窗
+var btnCancelUpload = document.getElementById('uploadWorkCancelBtn');
+if (btnCancelUpload) {
+    btnCancelUpload.onclick = function() {
+        document.getElementById('uploadWorkModal').style.display = 'none';
+    };
+}
+
+// 选择封面
+var btnSelectCover = document.getElementById('btnSelectCover');
+if (btnSelectCover) {
+    btnSelectCover.onclick = function() {
+        document.getElementById('uploadCoverInput').click();
+    };
+}
+
+var inputUploadCover = document.getElementById('uploadCoverInput');
+if (inputUploadCover) {
+    inputUploadCover.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) { alert('封面必须是图片文件！'); return; }
+        uploadCoverFile = file;
+        var reader = new FileReader();
+        reader.onload = function(ev) {
+            document.getElementById('uploadCoverPreview').innerHTML = `<img src="${ev.target.result}" style="width:100%; height:100%; object-fit:cover;">`;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// 选择主文件
+var btnSelectMain = document.getElementById('btnSelectMainFile');
+if (btnSelectMain) {
+    btnSelectMain.onclick = function() {
+        document.getElementById('uploadMainFile').click();
+    };
+}
+
+var inputUploadMain = document.getElementById('uploadMainFile');
+if (inputUploadMain) {
+    inputUploadMain.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) {
+            document.getElementById('uploadMainFileName').textContent = '未选择文件';
+            uploadMainFile = null;
+            return;
+        }
+        if (file.size > 50 * 1024 * 1024) { alert('文件不能超过 50MB'); this.value = ''; return; }
+        uploadMainFile = file;
+        document.getElementById('uploadMainFileName').textContent = file.name;
+    });
+}
+
+// 提交上传
+var btnSubmitUpload = document.getElementById('uploadWorkSubmitBtn');
+if (btnSubmitUpload) {
+    btnSubmitUpload.onclick = function() {
+        var title = document.getElementById('uploadWorkTitle').value.trim();
+        var category = document.getElementById('uploadWorkCategory').value;
+        var desc = document.getElementById('uploadWorkDesc').value.trim();
+        
+        if (!title) { alert('请输入作品名称'); return; }
+        if (!uploadMainFile) { alert('请选择要上传的主文件'); return; }
+
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = '上传中...';
+
+        var progressBar = document.getElementById('uploadProgressBar');
+        var progressInner = document.getElementById('uploadProgressInner');
+        if(progressBar) {
+            progressBar.style.display = 'block';
+            progressInner.style.width = '0%';
+        }
+
+        // 1. 如果选择了封面，先上传封面
+        var uploadCoverPromise = Promise.resolve('');
+        if (uploadCoverFile) {
+            var coverExt = uploadCoverFile.name.split('.').pop();
+            var coverKey = 'covers/' + currentUser.id + '/' + Date.now() + '.' + coverExt;
+            
+            uploadCoverPromise = new Promise((resolve, reject) => {
+                cos.putObject({
+                    Bucket: COS_BUCKET, Region: COS_REGION, Key: coverKey, Body: uploadCoverFile
+                }, function(err, data) {
+                    if (err) reject(new Error('封面上传失败：' + err.message));
+                    else resolve(`https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${coverKey}`);
+                });
+            });
+        }
+
+        // 2. 上传主文件
+        uploadCoverPromise.then(function(coverUrl) {
+            var fileExt = uploadMainFile.name.split('.').pop();
+            var mainFileName = Date.now() + '_' + Math.floor(Math.random() * 10000) + '.' + fileExt;
+            var mainFileKey = 'works/' + currentUser.id + '/' + mainFileName;
+
+            return new Promise((resolve, reject) => {
+                cos.putObject({
+                    Bucket: COS_BUCKET, Region: COS_REGION, Key: mainFileKey, Body: uploadMainFile,
+                    onProgress: function (info) {
+                        if(progressInner) progressInner.style.width = Math.floor(info.percent * 100) + '%';
+                    }
+                }, function(err, data) {
+                    if (err) reject(new Error('主文件上传失败：' + err.message));
+                    else resolve({ coverUrl: coverUrl, fileKey: mainFileKey });
+                });
+            });
+        })
+        .then(function(result) {
+            // 3. 写入数据库
+            var payload = {
+                user_id: currentUser.id,
+                title: title,
+                description: desc,
+                cover_url: result.coverUrl,
+                file_key: result.fileKey,
+                file_name: uploadMainFile.name,
+                file_size: uploadMainFile.size,
+                category: category
+            };
+            return supabaseClient.from('user_works').insert([payload]);
+        })
+        .then(function(res) {
+            if(progressBar) progressBar.style.display = 'none';
+            btn.disabled = false;
+            btn.textContent = '开始上传';
+            
+            if (res && res.error) { alert('保存记录失败：' + res.error.message); return; }
+            
+            alert('🎉 作品上传成功！');
+            document.getElementById('uploadWorkModal').style.display = 'none';
+            
+            if (currentCategoryList === 'myWorks') loadWorksList('myWorks');
+            if (currentCategoryList === category) loadWorksList(category);
+            
+        })
+        .catch(function(err) {
+            if(progressBar) progressBar.style.display = 'none';
+            btn.disabled = false;
+            btn.textContent = '开始上传';
+            alert((err && err.message) || '上传失败');
+        });
+    };
+}
+
+/* ============================================================
+ * 编辑作品弹窗逻辑
+ * ============================================================ */
 window.editWork = function(id) {
     supabaseClient.from('user_works').select('*').eq('id', id).maybeSingle().then(function(res) {
         if (res.data) {
@@ -797,7 +945,7 @@ function openWorkEditModal(workData) {
     tempCoverUrl = workData && workData.cover_url ? workData.cover_url : '';
     tempCoverFileKey = '';
 
-    document.getElementById('workEditTitle').value = workData ? (workData.title || workData.file_name) : tempWorkFile.file_name;
+    document.getElementById('workEditTitle').value = workData ? (workData.title || workData.file_name) : '';
     document.getElementById('workEditDesc').value = workData ? (workData.description || '') : '';
     
     var preview = document.getElementById('workCoverPreview');
@@ -810,113 +958,90 @@ function openWorkEditModal(workData) {
     document.getElementById('workEditModal').style.display = 'flex';
 }
 
-document.getElementById('uploadCoverBtn').addEventListener('click', function() {
-    document.getElementById('workCoverInput').click();
-});
-
-document.getElementById('workCoverInput').addEventListener('change', function(e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    if (!cosReady || !cos) { alert('云端未连接，无法上传封面'); return; }
-    
-    var btn = document.getElementById('uploadCoverBtn');
-    btn.disabled = true;
-    btn.textContent = '上传中...';
-
-    var fileExt = file.name.split('.').pop();
-    var fileKey = 'covers/' + currentUser.id + '/' + Date.now() + '.' + fileExt;
-
-    cos.putObject({
-        Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey, Body: file
-    }, function(err, data) {
-        btn.disabled = false;
-        btn.textContent = '上传封面图';
-        this.value = '';
-        if (err) { alert('封面上传失败：' + err.message); return; }
-        
-        tempCoverFileKey = fileKey;
-        tempCoverUrl = `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${fileKey}`;
-        
-        document.getElementById('workCoverPreview').innerHTML = `<img src="${tempCoverUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+var _btnUploadCover = document.getElementById('uploadCoverBtn');
+if (_btnUploadCover) {
+    _btnUploadCover.addEventListener('click', function() {
+        document.getElementById('workCoverInput').click();
     });
-});
+}
 
-document.getElementById('workEditSaveBtn').addEventListener('click', function() {
-    var title = document.getElementById('workEditTitle').value.trim();
-    if (!title) { alert('请输入作品标题'); return; }
+var _inputWorkCover = document.getElementById('workCoverInput');
+if (_inputWorkCover) {
+    _inputWorkCover.addEventListener('change', function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+        if (!cosReady || !cos) { alert('云端未连接，无法上传封面'); return; }
+        
+        var btn = document.getElementById('uploadCoverBtn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = '上传中...';
+        }
 
-    var desc = document.getElementById('workEditDesc').value.trim();
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = '保存中...';
+        var fileExt = file.name.split('.').pop();
+        var fileKey = 'covers/' + currentUser.id + '/' + Date.now() + '.' + fileExt;
 
-    var payload = {
-        title: title,
-        description: desc,
-        cover_url: tempCoverUrl
-    };
-
-    if (currentEditWorkId) {
-        supabaseClient.from('user_works').update(payload).eq('id', currentEditWorkId).then(function(res) {
-            btn.disabled = false;
-            btn.textContent = '保存作品';
-            if (res.error) { alert('保存失败：' + res.error.message); return; }
+        cos.putObject({
+            Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey, Body: file
+        }, function(err, data) {
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = '上传封面图';
+            }
+            this.value = '';
+            if (err) { alert('封面上传失败：' + err.message); return; }
             
-            document.getElementById('workEditModal').style.display = 'none';
-            tempCoverFileKey = '';
-            loadWorksList(currentCategoryList);
-        });
-    } else {
-        payload.user_id = currentUser.id;
-        payload.file_key = tempWorkFile.fileKey;
-        payload.file_name = tempWorkFile.file_name;
-        payload.file_size = tempWorkFile.file_size;
-        payload.category = 'myWorks';
-
-        supabaseClient.from('user_works').insert([payload]).then(function(res) {
-            btn.disabled = false;
-            btn.textContent = '保存作品';
-            if (res.error) { alert('保存失败：' + res.error.message); return; }
+            tempCoverFileKey = fileKey;
+            tempCoverUrl = `https://${COS_BUCKET}.cos.${COS_REGION}.myqcloud.com/${fileKey}`;
             
-            document.getElementById('workEditModal').style.display = 'none';
-            tempWorkFile = null;
-            tempCoverUrl = '';
-            tempCoverFileKey = '';
-            loadWorksList('myWorks');
+            document.getElementById('workCoverPreview').innerHTML = `<img src="${tempCoverUrl}" style="width:100%; height:100%; object-fit:cover;">`;
         });
-    }
-});
-
-document.getElementById('workEditCancelBtn').addEventListener('click', function() {
-    document.getElementById('workEditModal').style.display = 'none';
-    
-    if (tempWorkFile && !currentEditWorkId && cosReady && cos) {
-        cos.deleteObject({ Bucket: COS_BUCKET, Region: COS_REGION, Key: tempWorkFile.fileKey });
-    }
-    
-    if (tempCoverFileKey && cosReady && cos) {
-        cos.deleteObject({ Bucket: COS_BUCKET, Region: COS_REGION, Key: tempCoverFileKey });
-    }
-    
-    tempWorkFile = null;
-    tempCoverFileKey = '';
-});
-
-window.downloadWork = function(fileKey, fileName) {
-    if (!cosReady || !cos) return;
-    cos.getObjectUrl({
-        Bucket: COS_BUCKET, Region: COS_REGION, Key: fileKey, Sign: true, Expires: 3600
-    }, function (err, data) {
-        if (err) { alert('获取下载链接失败：' + err.message); return; }
-        var a = document.createElement('a');
-        a.href = data.Url;
-        a.download = fileName;
-        a.target = '_blank';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
     });
-};
+}
+
+var _btnWorkEditSave = document.getElementById('workEditSaveBtn');
+if (_btnWorkEditSave) {
+    _btnWorkEditSave.addEventListener('click', function() {
+        var title = document.getElementById('workEditTitle').value.trim();
+        if (!title) { alert('请输入作品标题'); return; }
+
+        var desc = document.getElementById('workEditDesc').value.trim();
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = '保存中...';
+
+        var payload = {
+            title: title,
+            description: desc,
+            cover_url: tempCoverUrl
+        };
+
+        if (currentEditWorkId) {
+            supabaseClient.from('user_works').update(payload).eq('id', currentEditWorkId).then(function(res) {
+                btn.disabled = false;
+                btn.textContent = '保存作品';
+                if (res.error) { alert('保存失败：' + res.error.message); return; }
+                
+                document.getElementById('workEditModal').style.display = 'none';
+                tempCoverFileKey = '';
+                loadWorksList(currentCategoryList);
+            });
+        }
+    });
+}
+
+var _btnWorkEditCancel = document.getElementById('workEditCancelBtn');
+if (_btnWorkEditCancel) {
+    _btnWorkEditCancel.addEventListener('click', function() {
+        document.getElementById('workEditModal').style.display = 'none';
+        
+        if (tempCoverFileKey && cosReady && cos) {
+            cos.deleteObject({ Bucket: COS_BUCKET, Region: COS_REGION, Key: tempCoverFileKey });
+        }
+        
+        tempCoverFileKey = '';
+    });
+}
 
 window.deleteWork = function(dbId, fileKey) {
     if (!confirm('确定要永久删除这个作品吗？此操作不可恢复！')) return;
@@ -1072,7 +1197,7 @@ function loadMyFeedbacks() {
                 return;
             }
             var data = res.data || [];
-            badge.textContent = data.length + ' ' + (getLang() === 'zh' ? '条' : '');
+            if (badge) badge.textContent = data.length + ' ' + (getLang() === 'zh' ? '条' : '');
             if (data.length === 0) {
                 listEl.innerHTML = '<div class="empty-state">' + t('userDash.feedbackListEmpty', '📭 暂无反馈记录') + '</div>';
                 resetFbSelection();
@@ -1109,30 +1234,32 @@ function loadMyFeedbacks() {
         });
 }
 
-document.getElementById('submitFeedbackBtn').addEventListener('click', function () {
-    var content = document.getElementById('feedbackContent').value.trim();
-    if (!content) { showToast(t('userDash.feedbackSubmitEmpty', '请填写反馈内容'), 'error'); return; }
-    if (!currentUser) { showToast('请先登录', 'error'); return; }
-
-    var btn = this;
-    btn.disabled = true;
-
-    supabaseClient.from('feedbacks').insert([{
-        user_id: currentUser.id,
-        user_email: currentUser.email,
-        content: content
-    }]).then(function (res) {
-        btn.disabled = false;
-        if (res.error) { showToast(t('userDash.feedbackSubmitFail', '提交失败：') + res.error.message, 'error'); return; }
-        document.getElementById('feedbackContent').value = '';
-        showToast(t('userDash.feedbackSubmitSuccess', '反馈提交成功，感谢你的反馈！'), 'success');
-        loadMyFeedbacks();
+var submitFbBtn = document.getElementById('submitFeedbackBtn');
+if (submitFbBtn) {
+    submitFbBtn.addEventListener('click', function () {
+        var content = document.getElementById('feedbackContent').value.trim();
+        if (!content) { showToast(t('userDash.feedbackSubmitEmpty', '请填写反馈内容'), 'error'); return; }
+        if (!currentUser) { showToast('请先登录', 'error'); return; }
+        var btn = this;
+        btn.disabled = true;
+        supabaseClient.from('feedbacks').insert([{
+            user_id: currentUser.id,
+            user_email: currentUser.email,
+            content: content
+        }]).then(function (res) {
+            btn.disabled = false;
+            if (res.error) { showToast(t('userDash.feedbackSubmitFail', '提交失败：') + res.error.message, 'error'); return; }
+            document.getElementById('feedbackContent').value = '';
+            showToast(t('userDash.feedbackSubmitSuccess', '反馈提交成功，感谢你的反馈！'), 'success');
+            loadMyFeedbacks();
+        });
     });
-});
+}
 
-document.getElementById('refreshFeedbackBtn').addEventListener('click', function () {
-    loadMyFeedbacks();
-});
+var refreshFbBtn = document.getElementById('refreshFeedbackBtn');
+if (refreshFbBtn) {
+    refreshFbBtn.addEventListener('click', function () { loadMyFeedbacks(); });
+}
 
 function resetFbSelection() {
     var sa = document.getElementById('fbSelectAll');
@@ -1221,21 +1348,32 @@ function confirmFb(message) {
     });
 }
 
-document.getElementById('fbSelectAll').addEventListener('change', function () {
-    var checked = this.checked;
-    document.querySelectorAll('#myFeedbackList .fb-item-check').forEach(function (c) { c.checked = checked; });
-    updateFbSelected();
-});
-document.getElementById('fbDeleteSelected').addEventListener('click', function () {
-    deleteFbRecords(getFbCheckedIds(), false);
-});
-document.getElementById('myFeedbackList').addEventListener('change', function (e) {
-    if (e.target && e.target.classList.contains('fb-item-check')) updateFbSelected();
-});
-document.getElementById('myFeedbackList').addEventListener('click', function (e) {
-    var del = e.target.closest ? e.target.closest('.fb-del') : null;
-    if (del) deleteFbRecords([del.getAttribute('data-id')], true);
-});
+var fbSelAll = document.getElementById('fbSelectAll');
+if (fbSelAll) {
+    fbSelAll.addEventListener('change', function () {
+        var checked = this.checked;
+        document.querySelectorAll('#myFeedbackList .fb-item-check').forEach(function (c) { c.checked = checked; });
+        updateFbSelected();
+    });
+}
+
+var fbDelSel = document.getElementById('fbDeleteSelected');
+if (fbDelSel) {
+    fbDelSel.addEventListener('click', function () {
+        deleteFbRecords(getFbCheckedIds(), false);
+    });
+}
+
+var myFbList = document.getElementById('myFeedbackList');
+if (myFbList) {
+    myFbList.addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('fb-item-check')) updateFbSelected();
+    });
+    myFbList.addEventListener('click', function (e) {
+        var del = e.target.closest ? e.target.closest('.fb-del') : null;
+        if (del) deleteFbRecords([del.getAttribute('data-id')], true);
+    });
+}
 
 function refreshCheckinUI() {
     if (!currentUser) return;
@@ -1255,20 +1393,26 @@ function refreshCheckinUI() {
         var todayRow = results[1].data;
         var hasCheckedToday = !!todayRow;
 
-        document.getElementById('myPoints').textContent = p.points || 0;
-        document.getElementById('myStreak').textContent = p.checkin_streak || 0;
+        var myPointsEl = document.getElementById('myPoints');
+        if (myPointsEl) myPointsEl.textContent = p.points || 0;
+        
+        var myStreakEl = document.getElementById('myStreak');
+        if (myStreakEl) myStreakEl.textContent = p.checkin_streak || 0;
 
         var btn = document.getElementById('checkinBtn');
-        if (hasCheckedToday) {
-            btn.textContent = t('userDash.checkinDone', '✓ 今日已签到');
-            btn.disabled = true;
-            document.getElementById('todayReward').textContent = '+' + (todayRow.points || 0);
-        } else {
-            btn.textContent = t('userDash.checkinBtn', '签 到');
-            btn.disabled = false;
-            document.getElementById('todayReward').textContent = '—';
+        if (btn) {
+            if (hasCheckedToday) {
+                btn.textContent = t('userDash.checkinDone', '✓ 今日已签到');
+                btn.disabled = true;
+                var todayRewardEl = document.getElementById('todayReward');
+                if (todayRewardEl) todayRewardEl.textContent = '+' + (todayRow.points || 0);
+            } else {
+                btn.textContent = t('userDash.checkinBtn', '签 到');
+                btn.disabled = false;
+                var todayRewardEl2 = document.getElementById('todayReward');
+                if (todayRewardEl2) todayRewardEl2.textContent = '—';
+            }
         }
-
         loadMyRank(currentUser.id);
     });
 }
@@ -1298,47 +1442,49 @@ function loadMyRank(userId) {
         });
 }
 
-document.getElementById('checkinBtn').addEventListener('click', function () {
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = t('common.loading', '加载中...');
+var checkinBtnEl = document.getElementById('checkinBtn');
+if (checkinBtnEl) {
+    checkinBtnEl.addEventListener('click', function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = t('common.loading', '加载中...');
 
-    supabaseClient.rpc('do_checkin').then(function (res) {
-        if (res.error) {
-            alert(t('userDash.checkinFail', '签到失败：') + res.error.message);
+        supabaseClient.rpc('do_checkin').then(function (res) {
+            if (res.error) {
+                alert(t('userDash.checkinFail', '签到失败：') + res.error.message);
+                btn.disabled = false;
+                btn.textContent = t('userDash.checkinBtn', '签 到');
+                return;
+            }
+            var data = res.data || {};
+            if (data.error) {
+                alert(data.error);
+                refreshCheckinUI();
+                loadCheckinCalendar();
+                return;
+            }
+            btn.textContent = t('userDash.checkinDone', '✓ 今日已签到');
+            var ptsEl = document.getElementById('myPoints');
+            if (ptsEl) ptsEl.textContent = (parseInt(ptsEl.textContent) || 0) + (data.points || 0);
+            
+            var streakEl = document.getElementById('myStreak');
+            if (streakEl) streakEl.textContent = data.streak || 0;
+            
+            var rewardEl = document.getElementById('todayReward');
+            if (rewardEl) rewardEl.textContent = '+' + (data.points || 0);
+            
+            loadCheckinCalendar();
+            addPointLog(currentUser.id, data.points, '每日签到', null, parseInt(ptsEl.textContent) || 0);
+            loadMyPointLogs();
+            checkAndUnlockAchievements('checkin');
+            alert(t('userDash.checkinSuccess', '签到成功！') + '\n' + t('userDash.checkinGotPoints', '获得 ') + data.points + t('userDash.checkinPointsUnit', ' 积分'));
+        }).catch(function (err) {
+            alert(t('userDash.checkinFail', '签到失败：') + (err.message || err));
             btn.disabled = false;
             btn.textContent = t('userDash.checkinBtn', '签 到');
-            return;
-        }
-        var data = res.data || {};
-        if (data.error) {
-            alert(data.error);
-            refreshCheckinUI();
-            loadCheckinCalendar();
-            return;
-        }
-        btn.textContent = t('userDash.checkinDone', '✓ 今日已签到');
-        document.getElementById('myPoints').textContent =
-            (parseInt(document.getElementById('myPoints').textContent) || 0) + (data.points || 0);
-        document.getElementById('myStreak').textContent = data.streak || 0;
-        document.getElementById('todayReward').textContent = '+' + (data.points || 0);
-        loadCheckinCalendar();
-
-        var _newBal = parseInt(document.getElementById('myPoints').textContent) || 0;
-        addPointLog(currentUser.id, data.points, '每日签到', null, _newBal);
-        loadMyPointLogs();
-
-        checkAndUnlockAchievements('checkin');
-
-        alert(t('userDash.checkinSuccess', '签到成功！') + '\n' +
-              t('userDash.checkinGotPoints', '获得 ') + data.points + t('userDash.checkinPointsUnit', ' 积分') + '\n' +
-              t('userDash.checkinStreakDay', '连续签到 ') + data.streak + t('userDash.checkinStreakDayUnit', ' 天'));
-    }).catch(function (err) {
-        alert(t('userDash.checkinFail', '签到失败：') + (err.message || err));
-        btn.disabled = false;
-        btn.textContent = t('userDash.checkinBtn', '签 到');
+        });
     });
-});
+}
 
 /* ============================================================
  *  积分明细
@@ -1447,13 +1593,17 @@ function escapeHtml(str) {
 function loadShop() {
     if (!currentUser) return;
 
-    supabaseClient.from('profiles').select('points').eq('id', currentUser.id).maybeSingle()
-        .then(function (r) {
-            var p = (r.data && r.data.points) || 0;
-            document.getElementById('shopMyPoints').textContent = t('userDash.shopMyPoints', '积分：') + p;
-        });
+    var shopPointsEl = document.getElementById('shopMyPoints');
+    if (shopPointsEl) {
+        supabaseClient.from('profiles').select('points').eq('id', currentUser.id).maybeSingle()
+            .then(function (r) {
+                var p = (r.data && r.data.points) || 0;
+                shopPointsEl.textContent = t('userDash.shopMyPoints', '积分：') + p;
+            });
+    }
 
     var grid = document.getElementById('shopGrid');
+    if (!grid) return;
     grid.innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
 
     supabaseClient.from('shop_items').select('*')
@@ -1509,6 +1659,7 @@ function loadShop() {
         });
 
     var hist = document.getElementById('shopHistory');
+    if (!hist) return;
     hist.innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
 
     supabaseClient.from('user_purchases').select('*')
@@ -1585,7 +1736,7 @@ function doPurchase(itemId, itemName, price) {
     if (!currentUser) return;
 
     var topPointsEl = document.getElementById('shopMyPoints');
-    var currentPoints = parseInt((topPointsEl.textContent || '').replace(/\D/g, ''), 10) || 0;
+    var currentPoints = topPointsEl ? (parseInt((topPointsEl.textContent || '').replace(/\D/g, ''), 10) || 0) : 999999;
     if (currentPoints < price) {
         alert(t('userDash.shopInsufficientPoints', '积分不足，还差 ') + (price - currentPoints) + t('userDash.shopPointUnit', ' 分'));
         return;
@@ -1606,7 +1757,7 @@ function doPurchase(itemId, itemName, price) {
                 return;
             }
             if (typeof data.newPoints === 'number') {
-                topPointsEl.textContent = t('userDash.shopMyPoints', '积分：') + data.newPoints;
+                if (topPointsEl) topPointsEl.textContent = t('userDash.shopMyPoints', '积分：') + data.newPoints;
                 var myPts = document.getElementById('myPoints');
                 if (myPts) myPts.textContent = data.newPoints;
             }
@@ -1616,8 +1767,8 @@ function doPurchase(itemId, itemName, price) {
             checkAndUnlockAchievements('purchase');
 
             alert(t('userDash.shopBuySuccess', '兑换成功！') + '\n' +
-                  t('userDash.shopCost', '消耗 ') + data.points + t('userDash.shopPointsUnit', ' 积分') + '\n' +
-                  t('userDash.shopRemain', '剩余 ') + data.newPoints + t('userDash.shopPointsUnit', ' 积分'));
+                t('userDash.shopCost', '消耗 ') + data.points + t('userDash.shopPointsUnit', ' 积分') + '\n' +
+                t('userDash.shopRemain', '剩余 ') + data.newPoints + t('userDash.shopPointsUnit', ' 积分'));
             loadShop();
         })
         .catch(function (err) {
@@ -1636,11 +1787,15 @@ function doPurchase(itemId, itemName, price) {
 })();
 
 /* ============================================================
- *  好友系统
+ *  微信级聊天逻辑 (引用 / 撤回 / 长按菜单)
  * ============================================================ */
 var friendsCache = [];
 var currentChatFriend = null;
 var chatPollTimer = null;
+var lastMsgTs = null;
+var chatMsgCache = [];       // 缓存当前聊天记录
+var currentReplyMsg = null;  // 当前引用的消息
+var activeContextMsgId = null; // 当前长按的消息 ID
 
 function loadFriends() {
     if (!currentUser) return;
@@ -1648,6 +1803,7 @@ function loadFriends() {
     var pendingList = document.getElementById('pendingList');
     var friendList  = document.getElementById('friendList');
     var badge       = document.getElementById('badgeFriends');
+    if (!pendingList || !friendList) return;
 
     pendingList.innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
     friendList.innerHTML  = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
@@ -1673,7 +1829,10 @@ function loadFriends() {
                 }
             });
 
-            badge.textContent = friendIds.length + t('userDash.friendsBadge', ' 位好友');
+            if (badge) badge.textContent = friendIds.length + t('userDash.friendsBadge', ' 位好友');
+            if (pendingFromOthers.length > 0) {
+                showFriendRequestBanner(pendingFromOthers.length);
+            }
 
             var allIds = friendIds.concat(pendingFromOthers.map(function (f) { return f.user_id; }));
             if (allIds.length === 0) {
@@ -1708,7 +1867,6 @@ function loadFriends() {
                             fh += renderFriendItem(u, null, false);
                         });
                         friendList.innerHTML = fh;
-                        bindFriendClicks();
                     }
                 });
         });
@@ -1718,6 +1876,7 @@ function renderFriendItem(user, fsId, isPending) {
     var avatar = user.avatar_url || DEFAULT_AVATAR;
     var name = user.full_name || user.email || '未知';
     var email = user.email || '';
+    
     if (isPending) {
         return '<div class="friend-item pending" data-fsid="' + fsId + '" data-uid="' + user.id + '">' +
             '<img src="' + escapeHtml(avatar) + '" onerror="this.src=\'' + DEFAULT_AVATAR + '\'">' +
@@ -1731,7 +1890,8 @@ function renderFriendItem(user, fsId, isPending) {
             '</div>' +
         '</div>';
     }
-    return '<div class="friend-item" data-uid="' + user.id + '">' +
+    
+    return '<div class="friend-item" onclick="window.openChatById(\'' + user.id + '\')" style="cursor:pointer;">' +
         '<img src="' + escapeHtml(avatar) + '" onerror="this.src=\'' + DEFAULT_AVATAR + '\'">' +
         '<div class="friend-info">' +
             '<div class="friend-name">' + escapeHtml(name) + '</div>' +
@@ -1762,97 +1922,36 @@ function bindPendingActions() {
     });
 }
 
-function bindFriendClicks() {
-    document.querySelectorAll('#friendList .friend-item[data-uid]').forEach(function (item) {
-        if (item.classList.contains('pending')) return;
-        item.addEventListener('click', function () {
-            var uid = this.getAttribute('data-uid');
-            var friend = friendsCache.find(function (u) { return u.id === uid; });
-            if (friend) openChat(friend);
+window.openChatById = function(uid) {
+    var friend = friendsCache.find(function (u) { return String(u.id) === String(uid); });
+    if (friend) openChat(friend);
+    else {
+        supabaseClient.from('profiles').select('*').eq('id', uid).maybeSingle().then(function(res) {
+            if (res.data) openChat(res.data);
+            else alert('找不到该用户的信息');
         });
-    });
-}
-
-document.getElementById('addFriendBtn').addEventListener('click', function () {
-    var input = document.getElementById('friendEmailInput');
-    var email = input.value.trim().toLowerCase();
-    if (!email) { alert('请输入对方邮箱'); return; }
-    if (email === (currentUser.email || '').toLowerCase()) {
-        alert(t('userDash.friendsAddSelf', '不能添加自己为好友'));
-        return;
     }
-
-    var btn = this;
-    btn.disabled = true;
-    btn.textContent = t('common.loading', '加载中...');
-
-    supabaseClient.from('profiles').select('id, email, full_name').eq('email', email).maybeSingle()
-        .then(function (res) {
-            if (res.error || !res.data) {
-                btn.disabled = false;
-                btn.textContent = t('userDash.friendsAddBtn', '➕ 添加好友');
-                alert(t('userDash.friendsAddNoUser', '找不到这个邮箱的用户'));
-                return;
-            }
-
-            var targetId = res.data.id;
-
-            supabaseClient.from('friendships').select('*')
-                .or('and(user_id.eq.' + currentUser.id + ',friend_id.eq.' + targetId + '),and(user_id.eq.' + targetId + ',friend_id.eq.' + currentUser.id + ')')
-                .maybeSingle()
-                .then(function (fRes) {
-                    if (fRes.data) {
-                        btn.disabled = false;
-                        btn.textContent = t('userDash.friendsAddBtn', '➕ 添加好友');
-                        if (fRes.data.status === 'accepted') alert(t('userDash.friendsAddAlready', '你们已经是好友了'));
-                        else if (fRes.data.user_id === currentUser.id) alert(t('userDash.friendsAddSent', '已发送过请求，等待对方同意'));
-                        else alert(t('userDash.friendsAddCameIn', '对方已经向你发起了请求，去"待处理"里同意吧'));
-                        return;
-                    }
-
-                    supabaseClient.from('friendships').insert([{
-                        user_id: currentUser.id,
-                        friend_id: targetId,
-                        status: 'pending'
-                    }]).then(function (iRes) {
-                        btn.disabled = false;
-                        btn.textContent = t('userDash.friendsAddBtn', '➕ 添加好友');
-                        if (iRes.error) { alert(t('userDash.friendsAddFail', '添加失败：') + iRes.error.message); return; }
-                        input.value = '';
-                        alert(t('userDash.friendsAddSuccess', '好友请求已发送！'));
-                        loadFriends();
-                    });
-                });
-        });
-});
+};
 
 function openChat(friend) {
     currentChatFriend = friend;
     lastMsgTs = null;
-    document.getElementById('chatFriendName').textContent = friend.full_name || friend.email;
+    currentReplyMsg = null;
+    hideReplyPreview();
+
+    var modal = document.getElementById('chatModal');
+    if (modal) modal.style.display = 'flex';
+
+    document.getElementById('chatFriendName').textContent = friend.full_name || friend.email || '未知好友';
     document.getElementById('chatFriendAvatar').src = friend.avatar_url || DEFAULT_AVATAR;
-    document.getElementById('chatModal').style.display = 'flex';
     document.getElementById('chatBody').innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
+
     loadMessages();
 
     if (chatPollTimer) clearInterval(chatPollTimer);
     chatPollTimer = setInterval(loadMessages, 3000);
     setTimeout(function () { document.getElementById('chatInput').focus(); }, 100);
 }
-
-function closeChat() {
-    document.getElementById('chatModal').style.display = 'none';
-    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
-    currentChatFriend = null;
-    lastMsgTs = null;
-}
-
-document.getElementById('chatCloseBtn').addEventListener('click', closeChat);
-document.getElementById('chatModal').addEventListener('click', function (e) {
-    if (e.target === this) closeChat();
-});
-
-var lastMsgTs = null;
 
 function loadMessages() {
     if (!currentUser || !currentChatFriend) return;
@@ -1863,7 +1962,9 @@ function loadMessages() {
         .then(function (res) {
             if (res.error) return;
             var data = res.data || [];
+            chatMsgCache = data;
             var body = document.getElementById('chatBody');
+            if (!body) return;
 
             if (data.length === 0) {
                 body.innerHTML = '<div class="empty-state">' + t('userDash.chatEmpty', '还没有聊天记录，说点什么吧~') + '</div>';
@@ -1872,18 +1973,14 @@ function loadMessages() {
 
             var latestFromFriend = null;
             data.forEach(function (m) {
-                if (m.from_user !== currentUser.id) {
-                    if (!latestFromFriend || new Date(m.created_at) > new Date(latestFromFriend)) {
-                        latestFromFriend = m.created_at;
-                    }
+                if (m.from_user !== currentUser.id && !m.is_recalled) {
+                    if (!latestFromFriend || new Date(m.created_at) > new Date(latestFromFriend)) latestFromFriend = m.created_at;
                 }
             });
             if (latestFromFriend) {
                 var isFirst = (lastMsgTs === null);
                 if (!isFirst && new Date(latestFromFriend) > new Date(lastMsgTs)) {
-                    if (window.LoginSound && window.LoginSound.playMessageIfEnabled) {
-                        window.LoginSound.playMessageIfEnabled();
-                    }
+                    if (window.LoginSound && window.LoginSound.playMessageIfEnabled) window.LoginSound.playMessageIfEnabled();
                 }
                 lastMsgTs = latestFromFriend;
             }
@@ -1891,22 +1988,117 @@ function loadMessages() {
             var html = '';
             data.forEach(function (m) {
                 var mine = m.from_user === currentUser.id;
-                var time = new Date(m.created_at).toLocaleString('zh-CN', { hour12: false });
-                html += '<div class="chat-msg ' + (mine ? 'mine' : 'theirs') + '">' +
-                    escapeHtml(m.content) +
-                    '<span class="chat-time">' + time + '</span>' +
-                '</div>';
+                var time = new Date(m.created_at).toLocaleString('zh-CN', { hour12: false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                
+                if (m.is_recalled) {
+                    html += '<div class="chat-msg recalled">' + (mine ? '你' : '对方') + '撤回了一条消息</div>';
+                    return;
+                }
+
+                var quoteHtml = '';
+                if (m.reply_to_id) {
+                    var quoted = chatMsgCache.find(function(x){ return x.id === m.reply_to_id; });
+                    if (quoted) {
+                        var qName = quoted.from_user === currentUser.id ? '你' : '对方';
+                        var qText = quoted.is_recalled ? '[已撤回]' : quoted.content;
+                        quoteHtml = '<div class="msg-quote-block">' + qName + '：' + escapeHtml(qText) + '</div>';
+                    }
+                }
+
+                html += '<div class="chat-msg ' + (mine ? 'mine' : 'theirs') + '" ' +
+                        'data-id="' + m.id + '" data-mine="' + mine + '" ' +
+                        'data-time="' + new Date(m.created_at).getTime() + '">' +
+                        quoteHtml +
+                        '<div class="msg-text">' + escapeHtml(m.content) + '</div>' +
+                        '<span class="chat-time">' + time + '</span>' +
+                    '</div>';
             });
             body.innerHTML = html;
             body.scrollTop = body.scrollHeight;
 
-            var unreadIds = data.filter(function (m) { return m.to_user === currentUser.id && !m.is_read; })
-                                .map(function (m) { return m.id; });
+            var unreadIds = data.filter(function (m) { return m.to_user === currentUser.id && !m.is_read && !m.is_recalled; }).map(function (m) { return m.id; });
             if (unreadIds.length > 0) {
                 supabaseClient.from('messages').update({ is_read: true }).in('id', unreadIds).then(function () {});
             }
+
+            bindMsgEvents();
         });
 }
+
+var pressTimer;
+function bindMsgEvents() {
+    document.querySelectorAll('.chat-msg:not(.recalled)').forEach(function(msgEl) {
+        msgEl.addEventListener('touchstart', function(e) {
+            var id = this.getAttribute('data-id');
+            pressTimer = setTimeout(function() {
+                showContextMenu(e.touches[0].clientX, e.touches[0].clientY, id);
+            }, 500);
+        }, { passive: true });
+        msgEl.addEventListener('touchend', function() { clearTimeout(pressTimer); });
+        msgEl.addEventListener('touchmove', function() { clearTimeout(pressTimer); });
+
+        msgEl.addEventListener('contextmenu', function(e) {
+            e.preventDefault();
+            var id = this.getAttribute('data-id');
+            showContextMenu(e.clientX, e.clientY, id);
+        });
+    });
+}
+
+function showContextMenu(x, y, msgId) {
+    activeContextMsgId = msgId;
+    var menu = document.getElementById('chatContextMenu');
+    var msg = chatMsgCache.find(function(m){ return m.id == msgId; });
+    if (!msg) return;
+
+    var isMine = msg.from_user === currentUser.id;
+    var timeLimit = (Date.now() - new Date(msg.created_at).getTime()) < 2 * 60 * 1000; // 2分钟
+    
+    var btnRecall = document.getElementById('menuRecall');
+    if (isMine && timeLimit) btnRecall.style.display = 'flex';
+    else btnRecall.style.display = 'none';
+
+    if (x + 120 > window.innerWidth) x = window.innerWidth - 120;
+    if (y + 100 > window.innerHeight) y = window.innerHeight - 100;
+
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.display = 'block';
+}
+
+document.addEventListener('click', function() {
+    document.getElementById('chatContextMenu').style.display = 'none';
+});
+document.addEventListener('scroll', function() {
+    document.getElementById('chatContextMenu').style.display = 'none';
+}, true);
+
+document.getElementById('menuReply').addEventListener('click', function() {
+    var msg = chatMsgCache.find(function(m){ return m.id == activeContextMsgId; });
+    if (msg) {
+        currentReplyMsg = msg;
+        document.getElementById('replyPreviewName').textContent = (msg.from_user === currentUser.id ? '你' : '对方');
+        document.getElementById('replyPreviewText').textContent = msg.content;
+        document.getElementById('replyPreviewBox').style.display = 'flex';
+        document.getElementById('chatInput').focus();
+    }
+});
+
+document.getElementById('cancelReplyBtn').addEventListener('click', hideReplyPreview);
+function hideReplyPreview() {
+    currentReplyMsg = null;
+    document.getElementById('replyPreviewBox').style.display = 'none';
+}
+
+document.getElementById('menuRecall').addEventListener('click', function() {
+    if (!activeContextMsgId) return;
+    if (!confirm('确定要撤回这条消息吗？')) return;
+
+    supabaseClient.from('messages').update({ is_recalled: true }).eq('id', activeContextMsgId).then(function(res) {
+        if (res.error) { alert('撤回失败：' + res.error.message); return; }
+        loadMessages();
+    });
+});
 
 function sendMessage() {
     if (!currentUser || !currentChatFriend) return;
@@ -1917,14 +2109,18 @@ function sendMessage() {
     var btn = document.getElementById('chatSendBtn');
     btn.disabled = true;
 
-    supabaseClient.from('messages').insert([{
+    var payload = {
         from_user: currentUser.id,
         to_user: currentChatFriend.id,
         content: content
-    }]).then(function (res) {
+    };
+    if (currentReplyMsg) payload.reply_to_id = currentReplyMsg.id;
+
+    supabaseClient.from('messages').insert([payload]).then(function (res) {
         btn.disabled = false;
         if (res.error) { alert(t('userDash.chatSendFail', '发送失败：') + res.error.message); return; }
         input.value = '';
+        hideReplyPreview();
         loadMessages();
     });
 }
@@ -1934,109 +2130,91 @@ document.getElementById('chatInput').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') sendMessage();
 });
 
-/* ============================================================
- *  头像上传
- * ============================================================ */
-document.getElementById('avatarChangeBtn').addEventListener('click', function () {
-    document.getElementById('avatarInput').click();
-});
-
-avatarInput.addEventListener('change', function (e) {
-    var file = e.target.files[0];
-    if (!file) return;
-    var inputEl = this;
-
-    if (file.size > 5 * 1024 * 1024) { alert('头像文件大小不能超过 5 MB！'); inputEl.value = ''; return; }
-    if (!file.type.startsWith('image/')) { alert('请上传图片文件！'); inputEl.value = ''; return; }
-
-    supabaseClient.auth.getUser().then(function (userRes) {
-        if (userRes.error || !userRes.data.user) { alert('获取用户信息失败'); return; }
-        var userId = userRes.data.user.id;
-
-        var storageKey = 'last_avatar_upload_' + userId;
-        var lastUpload = localStorage.getItem(storageKey);
-        if (lastUpload) {
-            var elapsed = Date.now() - parseInt(lastUpload, 10);
-            var oneHour = 60 * 60 * 1000;
-            if (elapsed < oneHour) {
-                var remainingMin = Math.ceil((oneHour - elapsed) / 60000);
-                alert('头像修改过于频繁\n请 ' + remainingMin + ' 分钟后再试');
-                inputEl.value = '';
-                return;
-            }
-        }
-
-        var fileExt = file.name.split('.').pop();
-        var filePath = userId + '/' + Date.now() + '.' + fileExt;
-
-        supabaseClient.storage.from('avatars')
-            .upload(filePath, file, { upsert: true })
-            .then(function (uploadRes) {
-                if (uploadRes.error) { alert('头像上传失败：' + uploadRes.error.message); return; }
-                return supabaseClient.storage.from('avatars').createSignedUrl(filePath, 60*60*24*365*10);
-            })
-            .then(function (signRes) {
-                if (!signRes || signRes.error) return;
-                var signedUrl = signRes.data.signedUrl;
-                return supabaseClient.auth.updateUser({ data: { avatar_url: signedUrl } })
-                    .then(function () {
-                        return supabaseClient.from('profiles').update({ avatar_url: signedUrl }).eq('id', userId);
-                    })
-                    .then(function () {
-                        localStorage.setItem(storageKey, Date.now().toString());
-                        avatarImg.src = signedUrl;
-                        welcomeAvatar.src = signedUrl;
-                        alert('头像更新成功！');
-                    });
-            });
-    });
+function closeChat() {
+    var chatModalEl = document.getElementById('chatModal');
+    if (chatModalEl) chatModalEl.style.display = 'none';
+    if (chatPollTimer) { clearInterval(chatPollTimer); chatPollTimer = null; }
+    currentChatFriend = null;
+    lastMsgTs = null;
+}
+document.getElementById('chatCloseBtn').addEventListener('click', closeChat);
+document.getElementById('chatModal').addEventListener('click', function(e) {
+    if (e.target === this) closeChat();
 });
 
 /* ============================================================
- *  退出登录
- * ============================================================ */
-logoutBtn.addEventListener('click', function () {
-    if (chatPollTimer) clearInterval(chatPollTimer);
-    supabaseClient.auth.signOut().then(function () { location.href = 'index.html'; });
-});
-
-/* ============================================================
- *  兑换记录详情弹窗 + 删除
- * ============================================================ */
-(function () {
-    var modal     = document.getElementById('itemDetailModal');
-    var btnClose  = document.getElementById('detailCloseBtn');
-    var btnDelete = document.getElementById('detailDeleteBtn');
-
-    if (modal) {
-        modal.addEventListener('click', function (e) {
-            if (e.target === modal) modal.style.display = 'none';
-        });
-    }
-    if (btnClose) {
-        btnClose.addEventListener('click', function () {
-            modal.style.display = 'none';
-        });
-    }
-    if (btnDelete) {
-        btnDelete.addEventListener('click', function () {
-            var id = this.dataset.purchaseId;
-            if (!id) return;
-            if (!confirm(t('userDash.detailDeleteConfirm', '确定删除这条兑换记录吗？删除后不可恢复。'))) return;
-
-            supabaseClient.from('user_purchases').delete().eq('id', id)
-                .then(function (r) {
-                    if (r.error) { alert('删除失败：' + r.error.message); return; }
-                    modal.style.display = 'none';
-                    loadShop();
-                });
-        });
-    }
-})();
-
-/* ============================================================
- *  初次加载 + 应用语言
+ *  防崩溃：换头像 & 退出登录 (补充在文件最底部)
  * ============================================================ */
 document.addEventListener('DOMContentLoaded', function () {
-    setTimeout(applyLang, 100);
+    // 1. 绑定“换头像”
+    var avatarBtn = document.getElementById('avatarChangeBtn');
+    var avatarInput = document.getElementById('avatarInput');
+    
+    if (avatarBtn && avatarInput) {
+        avatarBtn.onclick = function () {
+            avatarInput.click();
+        };
+    }
+
+    if (avatarInput) {
+        avatarInput.onchange = function (e) {
+            var file = e.target.files[0];
+            if (!file) return;
+            
+            if (file.size > 5 * 1024 * 1024) { alert('头像文件大小不能超过 5 MB！'); this.value = ''; return; }
+            if (!file.type.startsWith('image/')) { alert('请上传图片文件！'); this.value = ''; return; }
+
+            var btn = document.getElementById('avatarChangeBtn');
+            var oldText = btn ? btn.innerHTML : '';
+            if (btn) { btn.innerHTML = '上传中...'; btn.disabled = true; }
+
+            supabaseClient.auth.getUser().then(function (userRes) {
+                if (userRes.error || !userRes.data.user) { alert('获取用户信息失败'); return; }
+                var userId = userRes.data.user.id;
+                var fileExt = file.name.split('.').pop();
+                var filePath = userId + '/' + Date.now() + '.' + fileExt;
+
+                supabaseClient.storage.from('avatars')
+                    .upload(filePath, file, { upsert: true })
+                    .then(function (uploadRes) {
+                        if (uploadRes.error) { alert('头像上传失败：' + uploadRes.error.message); return; }
+                        return supabaseClient.storage.from('avatars').createSignedUrl(filePath, 60*60*24*365*10);
+                    })
+                    .then(function (signRes) {
+                        if (!signRes || signRes.error) return;
+                        var signedUrl = signRes.data.signedUrl;
+                        return supabaseClient.auth.updateUser({ data: { avatar_url: signedUrl } })
+                            .then(function () {
+                                return supabaseClient.from('profiles').update({ avatar_url: signedUrl }).eq('id', userId);
+                            })
+                            .then(function () {
+                                var img1 = document.getElementById('avatarImg');
+                                var img2 = document.getElementById('welcomeAvatar');
+                                if (img1) img1.src = signedUrl;
+                                if (img2) img2.src = signedUrl;
+                                alert('头像更新成功！');
+                            });
+                    }).finally(function() {
+                        if (btn) { btn.innerHTML = oldText; btn.disabled = false; }
+                        avatarInput.value = '';
+                    });
+            });
+        };
+    }
+
+    // 2. 绑定“退出登录”
+    var logoutButton = document.getElementById('logoutBtn');
+    if (logoutButton) {
+        logoutButton.onclick = function () {
+            if (confirm('确定要退出登录吗？')) {
+                if (window.supabaseClient) {
+                    window.supabaseClient.auth.signOut().then(function () {
+                        location.href = 'index.html';
+                    });
+                } else {
+                    location.href = 'index.html';
+                }
+            }
+        };
+    }
 });

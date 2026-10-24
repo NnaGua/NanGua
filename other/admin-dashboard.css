@@ -1,7 +1,7 @@
 @charset "utf-8";
 
 /* ============================================================
-   admin-dashboard.css —— 修复版（恢复布局 + 保留主题功能）
+admin-dashboard.css —— 修复版（恢复布局 + 保留主题功能）
    ============================================================ */
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -9,7 +9,7 @@ html, body { height: 100%; }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto,
-                 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     background: linear-gradient(160deg, var(--theme-bg-start) 0%, var(--theme-bg-end) 100%);
     background-attachment: fixed;
     color: var(--theme-text);
@@ -581,4 +581,390 @@ select option { background: var(--theme-elevated); color: var(--theme-text); }
     .config-grid { grid-template-columns: repeat(3, 1fr); }
     .health-grid, .stat-grid { grid-template-columns: 1fr; }
     .checkin-calendar { grid-template-columns: repeat(4, 1fr); }
+}
+/* ============================================================
+ *  移动端底部标签栏 · 修复版
+ * ============================================================ */
+.mobile-tabbar,
+.mobile-submenu { display: none; }
+
+@media (max-width: 768px) {
+    /* 强制隐藏侧边栏的旧横条导航 */
+    .sidebar .nav-menu { display: none !important; }
+
+    /* 底部留白，防止内容被遮挡 */
+    body.has-mobile-tabbar .main-wrapper {
+        padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* 底部固定标签栏 */
+    .mobile-tabbar {
+        display: flex;
+        position: fixed;
+        left: 0; right: 0; bottom: 0;
+        height: calc(62px + env(safe-area-inset-bottom, 0px));
+        padding: 4px 6px calc(4px + env(safe-area-inset-bottom, 0px));
+        gap: 2px;
+        box-sizing: border-box;
+        background: var(--theme-sidebar);
+        border-top: 1px solid var(--theme-border-soft);
+        box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.18);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        z-index: 200;
+    }
+
+    .mobile-tabbar-btn {
+        flex: 1; min-width: 0;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        gap: 3px; padding: 4px 2px;
+        background: transparent; border: none;
+        border-radius: 12px;
+        color: var(--theme-text-faint);
+        font-family: inherit;
+        cursor: pointer; outline: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: color .2s ease, background-color .2s ease;
+    }
+    .mobile-tabbar-btn .tabbar-icon {
+        font-size: 20px; line-height: 1;
+        transition: transform .25s cubic-bezier(.34,1.2,.64,1);
+    }
+    .mobile-tabbar-btn .tabbar-label {
+        font-size: 11px; font-weight: 500; line-height: 1;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        max-width: 100%;
+    }
+    .mobile-tabbar-btn.active {
+        color: var(--theme-accent);
+        background: var(--theme-accent-soft);
+    }
+    .mobile-tabbar-btn.active .tabbar-icon {
+        transform: translateY(-1px) scale(1.1);
+    }
+
+    /* 弹出子菜单 */
+    .mobile-submenu {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        position: fixed;
+        left: 8px; right: 8px;
+        bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+        padding: 10px;
+        max-height: 55vh; overflow-y: auto;
+        scrollbar-width: none;
+        background: var(--theme-elevated);
+        border: 1px solid var(--theme-border);
+        border-radius: 16px;
+        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.35);
+        z-index: 199;
+        opacity: 0;
+        transform: translateY(10px) scale(0.98);
+        pointer-events: none;
+        transition: opacity .22s ease, transform .25s cubic-bezier(.34,1.2,.64,1);
+        -webkit-overflow-scrolling: touch;
+    }
+    .mobile-submenu::-webkit-scrollbar { display: none; }
+    .mobile-submenu.show {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        pointer-events: auto;
+    }
+
+    .mobile-submenu-btn {
+        flex: 0 0 auto;
+        padding: 9px 14px;
+        background: var(--theme-info-box);
+        border: 1px solid var(--theme-border-soft);
+        border-radius: 999px;
+        color: var(--theme-text-dim);
+        font-family: inherit; font-size: 13px; font-weight: 500;
+        white-space: nowrap; cursor: pointer; outline: none;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .12s ease;
+    }
+    .mobile-submenu-btn:active {
+        background: var(--theme-accent-soft);
+        border-color: var(--theme-accent-border);
+        color: var(--theme-accent);
+        transform: scale(.96);
+    }
+}
+/* ============================================================
+ *  全局强制修复：白色输入框 & 丑陋滚动条
+ * ============================================================ */
+
+/* 1. 彻底干掉所有输入框、文本域、下拉框的白色背景 */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+    background-color: var(--theme-info-box) !important;
+    color: var(--theme-text) !important;
+    border: 1px solid var(--theme-border-soft) !important;
+    border-radius: var(--radius-md);
+    outline: none;
+}
+
+/* 选中和聚焦时的样式 */
+input:not([type="checkbox"]):not([type="radio"]):focus,
+textarea:focus,
+select:focus {
+    border-color: var(--theme-accent) !important;
+    box-shadow: 0 0 0 3px var(--theme-accent-soft) !important;
+}
+
+/* 2. 复选框和单选框颜色跟随主题 */
+input[type="checkbox"], 
+input[type="radio"] {
+    accent-color: var(--theme-accent) !important;
+    cursor: pointer;
+}
+
+/* 3. 美化所有滚动条（全局生效） */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--theme-border);
+    border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: var(--theme-text-faint);
+}
+/* 针对 Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--theme-border) transparent;
+}
+
+/* 4. 修复部分白底按钮 */
+.announce-form button:not(.btn-save),
+.shop-add-form button:not(.btn-save),
+.fb-btn {
+    background-color: var(--theme-info-box);
+    color: var(--theme-text);
+}
+/* ============================================================
+ *  AI 决策复审 & AI 分级配置 · 排版彻底修复
+ * ============================================================ */
+
+/* ---------- 1. AI 决策复审卡片 ---------- */
+#aiDecisionsList {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4); /* 卡片之间的间距 */
+    margin-top: var(--space-4);
+}
+
+.ai-decision-card {
+    background: var(--theme-info-box);
+    border: 1px solid var(--theme-border-soft);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    transition: all 0.2s ease;
+}
+
+.ai-decision-card:hover {
+    border-color: var(--theme-accent-border);
+    box-shadow: var(--shadow-sm);
+}
+
+.ai-decision-head {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+    font-size: 0.85em;
+}
+
+/* 级别徽章 (L0, L1...) */
+.ai-decision-head .level-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: bold;
+    background: var(--theme-elevated);
+    color: var(--theme-text);
+    border: 1px solid var(--theme-border);
+}
+.ai-decision-head .level-badge.l0 { background: rgba(130,200,150,.15); color: #8cc8a0; border-color: rgba(130,200,150,.3); }
+.ai-decision-head .level-badge.l1 { background: rgba(124,174,224,.15); color: #7caee0; border-color: rgba(124,174,224,.3); }
+.ai-decision-head .level-badge.l2 { background: rgba(248,200,80,.15); color: #f8c850; border-color: rgba(248,200,80,.3); }
+.ai-decision-head .level-badge.l3 { background: rgba(214,139,139,.15); color: var(--danger); border-color: rgba(214,139,139,.3); }
+
+/* 判定结果徽章 (ok, warn, block) */
+.ai-decision-head .verdict-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+.ai-decision-head .verdict-badge.ok { color: #8cc8a0; }
+.ai-decision-head .verdict-badge.warn { color: #f8c850; }
+.ai-decision-head .verdict-badge.block { color: var(--danger); }
+
+/* 目标、时间、置信度 */
+.ai-decision-head .confidence {
+    color: var(--theme-accent);
+    font-weight: 600;
+}
+.ai-decision-head .dec-target {
+    color: var(--theme-text-dim);
+    font-family: monospace;
+}
+.ai-decision-head .dec-time {
+    margin-left: auto; /* 把时间推到最右边 */
+    color: var(--theme-text-faint);
+}
+
+/* 理由与标签 */
+.ai-decision-reason {
+    font-size: 0.95em;
+    color: var(--theme-text);
+    line-height: 1.6;
+    padding: var(--space-3) 0;
+    border-top: 1px dashed var(--theme-border-soft);
+    border-bottom: 1px dashed var(--theme-border-soft);
+    margin-bottom: var(--space-3);
+    word-break: break-word;
+}
+
+.ai-decision-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: var(--space-3);
+}
+.ai-decision-tags .tag {
+    font-size: 0.75em;
+    padding: 2px 8px;
+    background: var(--theme-card);
+    border: 1px solid var(--theme-border-soft);
+    border-radius: 999px;
+    color: var(--theme-text-dim);
+}
+
+/* 操作区（回滚按钮） */
+.ai-decision-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ---------- 2. AI 分级配置 ---------- */
+.dw-config-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.config-item {
+    background: var(--theme-info-box);
+    border: 1px solid var(--theme-border-soft);
+    border-radius: var(--radius-md);
+    padding: var(--space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    transition: border-color 0.2s;
+}
+
+.config-item:hover {
+    border-color: var(--theme-accent-border);
+}
+
+.config-item-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.config-item-label {
+    font-weight: 600;
+    color: var(--theme-text);
+    font-size: 1em;
+}
+
+.config-item-code {
+    font-size: 0.75em;
+    color: var(--theme-accent);
+    background: var(--theme-card);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--theme-border-soft);
+}
+
+/* 级别选择器 */
+.level-picker {
+    display: flex;
+    gap: 6px;
+    background: var(--theme-card);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--theme-border-soft);
+}
+
+.level-btn {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--theme-text-dim);
+    font-family: inherit;
+    font-size: 0.8em;
+    padding: 6px 0;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    transition: all 0.2s;
+}
+
+.level-btn small {
+    font-size: 0.85em;
+    opacity: 0.7;
+}
+
+.level-btn:hover {
+    background: var(--theme-hover);
+    color: var(--theme-text);
+}
+
+/* 选中状态的按钮 */
+.level-btn.active {
+    background: var(--theme-accent-soft);
+    color: var(--theme-accent);
+    font-weight: bold;
+    box-shadow: 0 0 0 1px var(--theme-accent-border);
+}
+
+/* 底部开关与保存按钮 */
+.config-item-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: auto;
+    padding-top: var(--space-2);
+    border-top: 1px solid var(--theme-border-soft);
+}
+
+.switch-mini {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85em;
+    color: var(--theme-text-dim);
+    cursor: pointer;
+}
+
+.switch-mini input {
+    accent-color: var(--theme-accent);
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
 }

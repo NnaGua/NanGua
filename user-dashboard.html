@@ -91,8 +91,8 @@
                     <span class="email" id="userEmail">加载中...</span>
                 </div>
                 <div class="user-action-row">
-                    <button class="avatar-change-btn" id="avatarChangeBtn" title="更换头像" data-i18n-title="common.changeAvatar" data-i18n="common.changeAvatar">📷 换头像</button>
-                    <button class="logout-btn-mini" id="logoutBtn" data-i18n="common.logout">退出</button>
+                    <button class="avatar-change-btn" id="avatarChangeBtn" onclick="document.getElementById('avatarInput').click();" title="更换头像" data-i18n-title="common.changeAvatar" data-i18n="common.changeAvatar">📷 换头像</button>
+                    <button class="logout-btn-mini" id="logoutBtn" onclick="if(confirm('确定要退出登录吗？')){ if(window.supabaseClient){ window.supabaseClient.auth.signOut().then(function(){ location.href='index.html'; }); } else { location.href='index.html'; } }" data-i18n="common.logout">退出</button>
                 </div>
             </div>
         </div>
@@ -108,8 +108,8 @@
                 <span class="nav-arrow">▾</span>
             </div>
             <div class="nav-sub" data-sub="wolfDad">
-                <div class="nav-sub-item" data-tab="publicWorks">🌍 公众作品</div>
-                <div class="nav-sub-item" data-tab="excellentWorks">🌟 优秀作品</div>
+                <div class="nav-sub-item" data-tab="publicWorks">🌍 地图分享</div>
+                <div class="nav-sub-item" data-tab="excellentWorks">🌟 模型分享</div>
                 <div class="nav-sub-item" data-tab="myWorks">📁 个人作品</div>
                 <div class="nav-sub-item" data-tab="favWorks">💖 收藏作品</div>
             </div>
@@ -205,22 +205,22 @@
                     </div>
                 </div>
             </div>
-<!-- 公众作品 -->
+<!-- 地图分享 -->
 <div class="card card-works" id="cardPublicWorks">
     <div class="card-head">
-        <h2>🌍 公众作品</h2>
-        <span class="badge">全部公开作品</span>
+        <h2>🌍 地图分享</h2>
+        <span class="badge">公开地图</span>
     </div>
     <div class="works-grid" id="publicWorksList">
         <div class="empty-state" data-i18n="common.loading">加载中...</div>
     </div>
 </div>
 
-<!-- 优秀作品 -->
+<!-- 模型分享 -->
 <div class="card card-works" id="cardExcellentWorks">
     <div class="card-head">
-        <h2>🌟 优秀作品</h2>
-        <span class="badge">精选推荐</span>
+        <h2>🌟 模型分享</h2>
+        <span class="badge">精选模型</span>
     </div>
     <div class="works-grid" id="excellentWorksList">
         <div class="empty-state" data-i18n="common.loading">加载中...</div>
@@ -234,13 +234,10 @@
         <span class="badge">我发布的</span>
     </div>
 
-    <!-- 上传区 -->
+        <!-- 上传区 -->
     <div class="upload-area">
-        <input type="file" id="myWorkFileInput" style="display:none;" />
-        <label class="upload-btn" for="myWorkFileInput">
-            📤 上传作品
-        </label>
-        <span class="upload-hint">支持图片、视频、文档等，单个文件不超过 50MB</span>
+        <button class="upload-btn" id="openUploadModalBtn">📤 上传新作品</button>
+        <span class="upload-hint">支持图片、视频、压缩包等，单个文件不超过 50MB</span>
         <div class="upload-progress" id="uploadProgressBar" style="display:none;">
             <div class="upload-progress-inner" id="uploadProgressInner"></div>
         </div>
@@ -507,7 +504,7 @@
         <div class="item-detail-box">
             <div class="item-detail-left">
                 <img id="detailImage" src="" alt=""
-                     onerror="this.style.display='none'; document.getElementById('detailIconFallback').style.display='flex';">
+                onerror="this.style.display='none'; document.getElementById('detailIconFallback').style.display='flex';">
                 <div id="detailIconFallback" style="display:none;">🎁</div>
             </div>
             <div class="item-detail-right">
@@ -523,21 +520,51 @@
                 <div class="detail-info-row" style="flex-direction:column; align-items:flex-start; gap:6px;">
                     <span class="label" style="margin-bottom:4px;" data-i18n="userDash.detailDesc">商品详情</span>
                     <span class="value" id="detailDesc"
-                          style="text-align:left; font-size:0.85em; line-height:1.6;
-                                 color:var(--theme-text-dim); white-space:pre-wrap;
-                                 word-break:break-word;">—</span>
+                style="text-align:left; font-size:0.85em; line-height:1.6;
+                color:var(--theme-text-dim); white-space:pre-wrap;
+                word-break:break-word;">—</span>
                 </div>
                 <div style="display:flex; gap:10px; margin-top:auto;">
                     <button class="item-detail-close" id="detailCloseBtn" style="flex:1;" data-i18n="userDash.detailClose">关 闭</button>
                     <button class="item-detail-close" id="detailDeleteBtn"
-                            style="flex:1; background:rgba(214,139,139,.15);
-                                   border-color:rgba(214,139,139,.45);
-                                   color:var(--danger);" data-i18n="userDash.detailDelete">删除记录</button>
+                    style="flex:1; background:rgba(214,139,139,.15);
+                    border-color:rgba(214,139,139,.45);
+                    olor:var(--danger);" data-i18n="userDash.detailDelete">删除记录</button>
                 </div>
             </div>
         </div>
     </div>
 
+        <!-- 作品编辑弹窗 (补上缺失的HTML) -->
+    <div class="modal-mask" id="workEditModal" style="display:none;">
+        <div class="modal-box" style="width: 480px; max-width: 90%;">
+            <h3>编辑作品信息</h3>
+            <div class="input-box">
+                <label>作品标题</label>
+                <input type="text" id="workEditTitle" placeholder="请输入作品标题" />
+            </div>
+            <div class="input-box">
+                <label>作品简介</label>
+                <textarea id="workEditDesc" rows="3" placeholder="请输入作品简介"></textarea>
+            </div>
+            <div class="input-box">
+                <label>封面图片（可选）</label>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <div id="workCoverPreview" style="width:80px; height:80px; border-radius:8px; background:rgba(255,255,255,0.05); border:1px dashed var(--theme-border); display:flex; align-items:center; justify-content:center; font-size:2em; overflow:hidden;">
+                        🖼️
+                    </div>
+                    <input type="file" id="workCoverInput" accept="image/*" style="display:none;" />
+                    <button type="button" id="uploadCoverBtn" class="btn-save" style="height:36px; padding:0 16px; font-size:12px; flex:0 0 auto; width:auto;">上传封面图</button>
+                </div>
+            </div>
+            <div class="bio-actions" style="margin-top:20px;">
+                <button id="workEditCancelBtn" data-i18n="common.cancel">取消</button>
+                <button id="workEditSaveBtn" data-i18n="common.save">保存作品</button>
+            </div>
+        </div>
+    </div>
+
+        <!-- ★ 全新微信级聊天弹窗 -->
     <div class="chat-mask" id="chatModal" style="display:none;">
         <div class="chat-box">
             <div class="chat-header">
@@ -546,11 +573,70 @@
                 <button class="chat-close-btn" id="chatCloseBtn">✕</button>
             </div>
             <div class="chat-body" id="chatBody">
-                <div class="empty-state" data-i18n="common.loading">加载中...</div>
+                <div class="empty-state">加载中...</div>
             </div>
-            <div class="chat-input-box">
-                <input type="text" id="chatInput" placeholder="输入消息..." data-i18n-placeholder="userDash.chatInputPlaceholder"/>
-                <button id="chatSendBtn" data-i18n="userDash.chatSend">发送</button>
+            
+            <div class="chat-input-wrapper">
+                <!-- 引用预览框 -->
+                <div id="replyPreviewBox" class="reply-preview-box" style="display:none;">
+                    <div class="reply-preview-content">
+                        <span id="replyPreviewName">对方</span>：<span id="replyPreviewText">消息内容</span>
+                    </div>
+                    <button id="cancelReplyBtn" class="cancel-reply-btn">✕</button>
+                </div>
+                
+                <div class="chat-input-box">
+                    <input type="text" id="chatInput" placeholder="输入消息..." maxlength="200"/>
+                    <button id="chatSendBtn">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ★ 全新：上传作品弹窗 -->
+    <div class="modal-mask" id="uploadWorkModal" style="display:none; z-index: 4000;">
+        <div class="modal-box" style="width: 480px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
+            <h3 style="margin-bottom: 16px;">📤 上传新作品</h3>
+            
+            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
+                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品分类</label>
+                <select id="uploadWorkCategory" class="theme-select">
+                    <option value="publicWorks">🌍 地图分享</option>
+                    <option value="excellentWorks">🌟 模型分享</option>
+                </select>
+            </div>
+            
+            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
+                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品名称</label>
+                <input type="text" id="uploadWorkTitle" placeholder="请输入作品名称" class="theme-input">
+            </div>
+
+            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
+                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品简介（可选）</label>
+                <textarea id="uploadWorkDesc" rows="2" placeholder="简单介绍一下..." class="theme-input" style="height: 60px; padding: 10px 12px; resize: vertical;"></textarea>
+            </div>
+
+            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
+                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品封面图（可选）</label>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <div id="uploadCoverPreview" style="width:80px; height:80px; border-radius:8px; background:var(--theme-info-box); border:1px dashed var(--theme-border); display:flex; align-items:center; justify-content:center; font-size:2em; overflow:hidden;">🖼️</div>
+                    <input type="file" id="uploadCoverInput" accept="image/*" style="display:none;">
+                    <button type="button" id="btnSelectCover" class="btn-save" style="height:36px; padding:0 16px; font-size:12px; width:auto; flex:0 0 auto;">选择封面</button>
+                </div>
+            </div>
+
+            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
+                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">主文件（支持压缩包 .zip / .rar 等）</label>
+                <div style="display:flex; gap:12px; align-items:center;">
+                    <input type="file" id="uploadMainFile" style="display:none;">
+                    <button type="button" class="btn-save" id="btnSelectMainFile" style="height:36px; padding:0 16px; font-size:12px; width:auto; flex:0 0 auto;">选择文件</button>
+                    <span id="uploadMainFileName" style="color:var(--theme-text-faint); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">未选择文件</span>
+                </div>
+            </div>
+
+            <div class="bio-actions" style="margin-top:20px;">
+                <button id="uploadWorkCancelBtn">取消</button>
+                <button id="uploadWorkSubmitBtn">开始上传</button>
             </div>
         </div>
     </div>
