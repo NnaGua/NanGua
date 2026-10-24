@@ -529,13 +529,12 @@
                     <button class="item-detail-close" id="detailDeleteBtn"
                     style="flex:1; background:rgba(214,139,139,.15);
                     border-color:rgba(214,139,139,.45);
-                    olor:var(--danger);" data-i18n="userDash.detailDelete">删除记录</button>
+                    color:var(--danger);" data-i18n="userDash.detailDelete">删除记录</button>
                 </div>
             </div>
         </div>
     </div>
 
-        <!-- 作品编辑弹窗 (补上缺失的HTML) -->
     <div class="modal-mask" id="workEditModal" style="display:none;">
         <div class="modal-box" style="width: 480px; max-width: 90%;">
             <h3>编辑作品信息</h3>
@@ -564,7 +563,6 @@
         </div>
     </div>
 
-        <!-- ★ 全新微信级聊天弹窗 -->
     <div class="chat-mask" id="chatModal" style="display:none;">
         <div class="chat-box">
             <div class="chat-header">
@@ -577,7 +575,6 @@
             </div>
             
             <div class="chat-input-wrapper">
-                <!-- 引用预览框 -->
                 <div id="replyPreviewBox" class="reply-preview-box" style="display:none;">
                     <div class="reply-preview-content">
                         <span id="replyPreviewName">对方</span>：<span id="replyPreviewText">消息内容</span>
@@ -593,7 +590,6 @@
         </div>
     </div>
 
-    <!-- ★ 全新：上传作品弹窗 -->
     <div class="modal-mask" id="uploadWorkModal" style="display:none; z-index: 4000;">
         <div class="modal-box" style="width: 480px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
             <h3 style="margin-bottom: 16px;">📤 上传新作品</h3>
@@ -637,6 +633,38 @@
             <div class="bio-actions" style="margin-top:20px;">
                 <button id="uploadWorkCancelBtn">取消</button>
                 <button id="uploadWorkSubmitBtn">开始上传</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ★ 作品详情弹窗 -->
+    <div class="modal-mask" id="workDetailModal" style="display:none; z-index: 4000;">
+        <div class="modal-box" style="width: 520px; max-width: 90%; max-height: 90vh; overflow-y: auto; padding: 0; overflow: hidden;">
+            <div style="width: 100%; height: 240px; background: var(--theme-info-box); position: relative;">
+                <img id="detailWorkCover" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                <div id="detailWorkIcon" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 4em; color: var(--theme-text-faint);">📄</div>
+            </div>
+            
+            <div style="padding: 24px;">
+                <h2 id="detailWorkTitle" style="font-size: 1.4em; margin-bottom: 8px; color: var(--theme-text);">作品名称</h2>
+                <div style="font-size: 0.9em; color: var(--theme-text-dim); line-height: 1.6; margin-bottom: 20px;" id="detailWorkDesc">简介...</div>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-top: 1px dashed var(--theme-border); border-bottom: 1px dashed var(--theme-border); margin-bottom: 20px;">
+                    <span id="detailWorkAuthor" style="font-size: 0.9em; color: var(--theme-accent);">👤 作者</span>
+                    <span id="detailWorkTime" style="font-size: 0.85em; color: var(--theme-text-faint);">2026-10-25</span>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+                    <div style="display: flex; flex-direction: column;">
+                        <span style="font-size: 0.85em; color: var(--theme-text-faint);">文件大小</span>
+                        <span id="detailWorkSize" style="font-size: 1.1em; font-weight: 600; color: var(--theme-text);">0 MB</span>
+                    </div>
+                    <div style="display: flex; gap: 10px;" id="detailWorkActions">
+                    </div>
+                </div>
+                <div style="text-align: right; margin-top: 10px;">
+                    <button id="detailWorkCloseBtn" style="height: 42px; padding: 0 24px; border-radius: var(--radius-md); border: 1px solid var(--theme-border); background: transparent; color: var(--theme-text-dim); cursor: pointer; font-size: 0.95em;">关闭</button>
+                </div>
             </div>
         </div>
     </div>

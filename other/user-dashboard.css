@@ -2195,3 +2195,57 @@ body {
 #uploadWorkModal #uploadWorkSubmitBtn:hover {
     border-color: var(--theme-accent);
 }
+/* 作品网格布局 */
+.works-grid {
+    display: grid !important;
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+    gap: 16px !important;
+    width: 100%;
+}
+
+.work-item {
+    background: var(--theme-info-box);
+    border: 1px solid var(--theme-border-soft);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.work-item:hover {
+    transform: translateY(-3px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--theme-accent-border);
+}
+
+.work-cover, .work-icon {
+    width: 100%;
+    height: 120px !important;
+    object-fit: cover;
+    border-bottom: 1px solid var(--theme-border-soft);
+}
+
+.work-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5em;
+    background: var(--theme-card);
+}
+
+.work-info-box {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+.work-title {
+    font-size: 0.95em;
+    font-weight: 600;
+    color: var(--theme-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
