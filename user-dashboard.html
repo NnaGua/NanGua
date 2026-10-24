@@ -535,33 +535,40 @@
         </div>
     </div>
 
-    <div class="modal-mask" id="workEditModal" style="display:none;">
-        <div class="modal-box" style="width: 480px; max-width: 90%;">
-            <h3>编辑作品信息</h3>
-            <div class="input-box">
-                <label>作品标题</label>
-                <input type="text" id="workEditTitle" placeholder="请输入作品标题" />
-            </div>
-            <div class="input-box">
-                <label>作品简介</label>
-                <textarea id="workEditDesc" rows="3" placeholder="请输入作品简介"></textarea>
-            </div>
-            <div class="input-box">
-                <label>封面图片（可选）</label>
-                <div style="display:flex; gap:12px; align-items:center;">
-                    <div id="workCoverPreview" style="width:80px; height:80px; border-radius:8px; background:rgba(255,255,255,0.05); border:1px dashed var(--theme-border); display:flex; align-items:center; justify-content:center; font-size:2em; overflow:hidden;">
-                        🖼️
-                    </div>
-                    <input type="file" id="workCoverInput" accept="image/*" style="display:none;" />
-                    <button type="button" id="uploadCoverBtn" class="btn-save" style="height:36px; padding:0 16px; font-size:12px; flex:0 0 auto; width:auto;">上传封面图</button>
-                </div>
-            </div>
-            <div class="bio-actions" style="margin-top:20px;">
-                <button id="workEditCancelBtn" data-i18n="common.cancel">取消</button>
-                <button id="workEditSaveBtn" data-i18n="common.save">保存作品</button>
+<div class="modal-mask" id="workEditModal" style="display:none; align-items:center; justify-content:center;">
+    <div class="modal-box" style="width: 480px; max-width: 92vw; padding: 28px 32px; background: #1e1e1e; border-radius: 16px; border: 1px solid #333; box-shadow: 0 20px 60px rgba(0,0,0,0.6); display: flex; flex-direction: column; gap: 20px;">
+        
+        <h3 style="margin: 0; font-size: 1.15em; font-weight: 600; color: #fff; padding-bottom: 12px; border-bottom: 1px solid #333;">编辑作品信息</h3>
+
+        <!-- 作品标题 -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 0.9em; color: #aaa; font-weight: 500;">作品标题</div>
+            <input type="text" id="workEditTitle" placeholder="请输入作品标题" style="width: 100%; height: 44px; padding: 0 16px; border-radius: 10px; background: #2a2a2a !important; color: #fff !important; border: 1px solid #444 !important; outline: none; font-family: inherit; font-size: 0.95em; box-sizing: border-box;">
+        </div>
+
+        <!-- 作品简介 -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 0.9em; color: #aaa; font-weight: 500;">作品简介</div>
+            <textarea id="workEditDesc" placeholder="简单介绍一下..." style="width: 100%; height: 100px; padding: 12px 16px; border-radius: 10px; background: #2a2a2a !important; color: #fff !important; border: 1px solid #444 !important; outline: none; font-family: inherit; font-size: 0.95em; resize: vertical; box-sizing: border-box; line-height: 1.5;"></textarea>
+        </div>
+
+        <!-- 封面图片 -->
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="font-size: 0.9em; color: #aaa; font-weight: 500;">封面图片（可选）</div>
+            <div style="display: flex; align-items: center; gap: 16px;">
+                <div id="workCoverPreview" style="width: 80px; height: 80px; border-radius: 12px; background: #2a2a2a; border: 1px dashed #444; display: flex; align-items: center; justify-content: center; font-size: 2em; overflow: hidden; flex-shrink: 0; color: #666;">🖼️</div>
+                <button type="button" id="uploadCoverBtn" style="height: 40px; padding: 0 20px; border-radius: 8px; background: #2a2a2a !important; border: 1px solid #444 !important; color: #fff !important; cursor: pointer; font-size: 0.9em; transition: all 0.2s;">上传封面图</button>
+                <input type="file" id="workCoverInput" accept="image/*" style="display: none;">
             </div>
         </div>
+
+        <!-- 底部按钮 -->
+        <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; padding-top: 16px; border-top: 1px solid #333;">
+            <button type="button" id="workEditCancelBtn" style="height: 44px; padding: 0 24px; border-radius: 10px; border: 1px solid #444; background: transparent; color: #aaa; cursor: pointer; font-size: 0.95em; transition: all 0.2s;">取消</button>
+            <button type="button" id="workEditSaveBtn" style="height: 44px; padding: 0 24px; border-radius: 10px; border: 1px solid #d4a574; background: rgba(212, 165, 116, 0.15); color: #d4a574; cursor: pointer; font-size: 0.95em; font-weight: 500; transition: all 0.2s;">保存作品</button>
+        </div>
     </div>
+</div>
 
     <div class="chat-mask" id="chatModal" style="display:none;">
         <div class="chat-box">
@@ -590,52 +597,63 @@
         </div>
     </div>
 
-    <div class="modal-mask" id="uploadWorkModal" style="display:none; z-index: 4000;">
-        <div class="modal-box" style="width: 480px; max-width: 90%; max-height: 90vh; overflow-y: auto;">
-            <h3 style="margin-bottom: 16px;">📤 上传新作品</h3>
-            
-            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
-                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品分类</label>
-                <select id="uploadWorkCategory" class="theme-select">
-                    <option value="publicWorks">🌍 地图分享</option>
-                    <option value="excellentWorks">🌟 模型分享</option>
-                </select>
-            </div>
-            
-            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
-                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品名称</label>
-                <input type="text" id="uploadWorkTitle" placeholder="请输入作品名称" class="theme-input">
-            </div>
+    <div class="modal-mask" id="uploadWorkModal" style="display:none;">
+    <div class="modal-box">
+        <h3>📤 上传新作品</h3>
 
-            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
-                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品简介（可选）</label>
-                <textarea id="uploadWorkDesc" rows="2" placeholder="简单介绍一下..." class="theme-input" style="height: 60px; padding: 10px 12px; resize: vertical;"></textarea>
-            </div>
+        <!-- 分类 -->
+        <div class="form-group">
+            <div class="form-label">作品分类</div>
+            <select id="uploadWorkCategory" class="theme-select">
+                <option value="publicWorks">🌍 地图分享</option>
+                <option value="excellentWorks">🌟 模型分享</option>
+                <option value="myWorks">📁 个人作品</option>
+            </select>
+        </div>
 
-            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
-                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">作品封面图（可选）</label>
-                <div style="display:flex; gap:12px; align-items:center;">
-                    <div id="uploadCoverPreview" style="width:80px; height:80px; border-radius:8px; background:var(--theme-info-box); border:1px dashed var(--theme-border); display:flex; align-items:center; justify-content:center; font-size:2em; overflow:hidden;">🖼️</div>
-                    <input type="file" id="uploadCoverInput" accept="image/*" style="display:none;">
-                    <button type="button" id="btnSelectCover" class="btn-save" style="height:36px; padding:0 16px; font-size:12px; width:auto; flex:0 0 auto;">选择封面</button>
-                </div>
-            </div>
+        <!-- 名称 -->
+        <div class="form-group">
+            <div class="form-label">作品名称</div>
+            <input type="text" id="uploadWorkTitle" class="theme-input" placeholder="请输入作品名称">
+        </div>
 
-            <div class="input-box" style="text-align: left; margin-bottom: 12px;">
-                <label style="font-size: 13px; margin-bottom: 6px; display: block; color: var(--theme-text-dim);">主文件（支持压缩包 .zip / .rar 等）</label>
-                <div style="display:flex; gap:12px; align-items:center;">
-                    <input type="file" id="uploadMainFile" style="display:none;">
-                    <button type="button" class="btn-save" id="btnSelectMainFile" style="height:36px; padding:0 16px; font-size:12px; width:auto; flex:0 0 auto;">选择文件</button>
-                    <span id="uploadMainFileName" style="color:var(--theme-text-faint); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;">未选择文件</span>
-                </div>
-            </div>
+        <!-- 简介 -->
+        <div class="form-group">
+            <div class="form-label">作品简介（可选）</div>
+            <textarea id="uploadWorkDesc" placeholder="简单介绍一下..."></textarea>
+        </div>
 
-            <div class="bio-actions" style="margin-top:20px;">
-                <button id="uploadWorkCancelBtn">取消</button>
-                <button id="uploadWorkSubmitBtn">开始上传</button>
+        <!-- 封面 -->
+        <div class="form-group">
+            <div class="form-label">作品封面图（可选）</div>
+            <div class="file-select-row">
+                <div class="cover-preview-box" id="uploadCoverPreview">🖼️</div>
+                <button type="button" class="file-select-btn" id="btnSelectCover">选择封面</button>
+                <input type="file" id="uploadCoverInput" accept="image/*" style="display:none;">
             </div>
         </div>
+
+        <!-- 主文件 -->
+        <div class="form-group">
+            <div class="form-label">主文件（支持压缩包 .zip / .rar 等）</div>
+            <div class="file-select-row">
+                <button type="button" class="file-select-btn" id="btnSelectMainFile">选择文件</button>
+                <span class="file-name-hint" id="uploadMainFileName">未选择文件</span>
+                <input type="file" id="uploadMainFile" style="display:none;">
+            </div>
+            <!-- 进度条 -->
+            <div class="progress-container" id="uploadProgressBar">
+                <div class="progress-bar-inner" id="uploadProgressInner"></div>
+            </div>
+        </div>
+
+        <!-- 底部按钮 -->
+        <div class="modal-actions">
+            <button type="button" id="uploadWorkCancelBtn">取消</button>
+            <button type="button" id="uploadWorkSubmitBtn">开始上传</button>
+        </div>
     </div>
+</div>
 
     <!-- ★ 作品详情弹窗 -->
     <div class="modal-mask" id="workDetailModal" style="display:none; z-index: 4000;">

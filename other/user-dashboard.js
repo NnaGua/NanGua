@@ -474,132 +474,234 @@ function loadWorksList(category) {
     var container = document.getElementById(category + 'List');
     if (!container) return;
     container.innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
-    var query = supabaseClient.from('user_works').select('*');
-    if (category === 'myWorks' || category === 'favWorks') { query = query.eq('user_id', currentUser.id); } else { query = query.eq('category', category); }
-    query = query.order('created_at', { ascending: false });
     
-    query.then(function (res) {
-        if (res.error) { container.innerHTML = '<div class="empty-state">加载失败：' + res.error.message + '</div>'; return; }
-        var data = res.data || [];
-        globalWorksData = data;
-        if (data.length === 0) { container.innerHTML = '<div class="empty-state">暂时没有任何作品哦~</div>'; return; }
+    // 强行撑爆父级
+    var parentCard = container.closest('.card');
+    if (parentCard) {
+        parentCard.style.setProperty('max-width', '100%', 'important');
+        parentCard.style.setProperty('width', '100%', 'important');
+    }
 
-        // 先异步获取带签名的临时链接
-        var promises = data.map(function(item) {
-            return new Promise(function(resolve) {
-                if (!item.cover_url) { item.finalCoverUrl = ''; resolve(); return; }
-                
-                if (item.cover_url.indexOf('.myqcloud.com/') !== -1 && cosReady && cos) {
-                    var key = item.cover_url.split('.myqcloud.com/')[1].split('?')[0];
-                    cos.getObjectUrl({
-                        Bucket: COS_BUCKET, Region: COS_REGION, Key: key, Sign: true, Expires: 3600
-                    }, function(err, data2) {
-                        item.finalCoverUrl = (data2 && data2.Url) ? data2.Url : item.cover_url;
-                        resolve();
-                    });
-                } else {
-                    item.finalCoverUrl = item.cover_url;
-                    resolve();
+    function fetchAndRender(workIds, fromFav) {
+        var query = supabaseClient.from('user_works').select('*');
+        if (fromFav) { query = query.in('id', workIds); } 
+        else if (category === 'myWorks') { query = query.eq('user_id', currentUser.id); } 
+        else { query = query.eq('category', category); }
+        
+        query = query.order('created_at', { ascending: false });
+        
+        query.then(function (res) {
+            if (res.error) { container.innerHTML = '<div class="empty-state">加载失败：' + res.error.message + '</div>'; return; }
+            var data = res.data || [];
+            globalWorksData = data;
+            
+            if (data.length === 0) { 
+                container.innerHTML = '<div class="empty-state">' + (fromFav ? '你还没有收藏过作品哦~' : '暂时没有任何作品哦~') + '</div>'; 
+                return; 
+            }
+
+            var userIds = Array.from(new Set(data.map(function(x) { return x.user_id; })));
+            supabaseClient.from('profiles').select('id, full_name, email').in('id', userIds).then(function(pRes) {
+                var profileMap = {};
+                (pRes.data || []).forEach(function(p) { profileMap[p.id] = p; });
+
+                data.forEach(function(item) {
+                    var author = profileMap[item.user_id] || {};
+                    item.author_name = author.full_name || author.email || '未知用户';
+                    if (!item.work_code) item.work_code = '暂无';
+                });
+
+                // 1. 列表容器：强制横向排版，高度自动
+                container.innerHTML = `<div id="worksGrid_${category}" style="display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 20px !important; width: 100% !important; height: auto !important; align-items: flex-start !important;"></div>`;
+
+                // 2. 把搜索框塞进标题栏
+                if (parentCard) {
+                    var cardHead = parentCard.querySelector('.card-head');
+                    if (cardHead) {
+                        var oldSearch = cardHead.querySelector('.custom-search-wrapper');
+                        if (oldSearch) oldSearch.remove();
+
+                        var searchHtml = `
+                            <div class="custom-search-wrapper" style="display:flex; align-items:center; margin-left:auto; margin-right: 10px;">
+                                <div style="display: flex; align-items: center; background: var(--theme-info-box); border: 1px solid var(--theme-border); border-radius: 20px; padding: 2px; height: 38px; box-sizing: border-box;">
+                                    <input type="text" id="searchInput_${category}" placeholder="搜索作品ID或作者昵称..." style="width: 200px; height: 100%; padding: 0 12px; border: none; background: transparent; color: var(--theme-text); outline: none; font-size: 0.85em;">
+                                    <button id="searchBtn_${category}" style="height: 100%; padding: 0 16px; border: none; border-radius: 18px; background: var(--theme-accent); color: #fff; font-size: 0.85em; cursor: pointer; white-space: nowrap;">搜索</button>
+                                </div>
+                            </div>
+                        `;
+                        cardHead.insertAdjacentHTML('beforeend', searchHtml);
+                        
+                        var searchInput = document.getElementById(`searchInput_${category}`);
+                        var searchBtn = document.getElementById(`searchBtn_${category}`);
+
+                        function doSearch() { renderGrid(searchInput.value.trim()); }
+                        searchBtn.addEventListener('click', doSearch);
+                        searchInput.addEventListener('keypress', function(e) { if (e.key === 'Enter') doSearch(); });
+                        searchInput.addEventListener('input', function() { renderGrid(this.value.trim()); });
+                    }
                 }
-            });
-        });
 
-        Promise.all(promises).then(function() {
-            var html = '';
-            data.forEach(function (item) {
-                var isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file_name);
-                var isVid = /\.(mp4|webm|mov)$/i.test(item.file_name);
-                var defaultIcon = isImg ? '🖼️' : (isVid ? '🎬' : '📄');
-                
-                var headerHtml = item.finalCoverUrl
-                    ? `<img class="work-cover" src="${escapeHtml(item.finalCoverUrl)}" onerror="this.style.display='none'; this.parentNode.querySelector('.work-icon').style.display='flex';" alt="cover"><div class="work-icon" style="display:none;">${defaultIcon}</div>` 
-                    : `<div class="work-icon">${defaultIcon}</div>`;
-                    
-                var title = item.title || item.file_name;
-                html += `<div class="work-item" onclick="openWorkDetail('${item.id}')">${headerHtml}<div class="work-info-box" style="padding: 10px;"><div class="work-title" title="${escapeHtml(title)}" style="margin-bottom: 0; text-align: center;">${escapeHtml(title)}</div></div></div>`;
+                function renderGrid(filterText) {
+                    var gridEl = document.getElementById(`worksGrid_${category}`);
+                    var filteredData = data;
+                    if (filterText) {
+                        filterText = filterText.toLowerCase();
+                        filteredData = data.filter(function(item) {
+                            return (item.title && item.title.toLowerCase().includes(filterText)) ||
+                                   (item.work_code && item.work_code.toLowerCase().includes(filterText)) ||
+                                   (item.author_name && item.author_name.toLowerCase().includes(filterText));
+                        });
+                    }
+
+                    if (filteredData.length === 0) {
+                        gridEl.innerHTML = '<div style="width: 100%; text-align: center; padding: 40px; color: #888;">没有找到相关作品</div>';
+                        return;
+                    }
+
+                    var promises = filteredData.map(function(item) {
+                        return new Promise(function(resolve) {
+                            if (!item.cover_url) { item.finalCoverUrl = ''; resolve(); return; }
+                            if (item.cover_url.indexOf('.myqcloud.com/') !== -1 && cosReady && cos) {
+                                var key = item.cover_url.split('.myqcloud.com/')[1].split('?')[0];
+                                cos.getObjectUrl({ Bucket: COS_BUCKET, Region: COS_REGION, Key: key, Sign: true, Expires: 3600 }, function(err, data2) {
+                                    item.finalCoverUrl = (data2 && data2.Url) ? data2.Url : item.cover_url;
+                                    resolve();
+                                });
+                            } else {
+                                item.finalCoverUrl = item.cover_url;
+                                resolve();
+                            }
+                        });
+                    });
+
+                    Promise.all(promises).then(function() {
+                        var gridHtml = '';
+                        filteredData.forEach(function (item) {
+                            var isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file_name);
+                            var isVid = /\.(mp4|webm|mov)$/i.test(item.file_name);
+                            var defaultIcon = isImg ? '🖼️' : (isVid ? '🎬' : '📄');
+                            
+                            // 【绝杀】不用 img 标签，直接用 background-image，彻底防屏蔽防压扁！
+                            var headerHtml = item.finalCoverUrl
+                                ? `<div style="width: 100% !important; height: 140px !important; min-height: 140px !important; max-height: 140px !important; flex-shrink: 0 !important; background-image: url('${escapeHtml(item.finalCoverUrl)}'); background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; border-radius: 12px 12px 0 0 !important; margin: 0 !important; padding: 0 !important; display: block !important;"></div>` 
+                                : `<div style="display: flex !important; width: 100% !important; height: 140px !important; min-height: 140px !important; flex-shrink: 0 !important; align-items: center !important; justify-content: center !important; font-size: 2.5em !important; background: #2a2a2a !important; color: #666 !important; border-radius: 12px 12px 0 0 !important;">${defaultIcon}</div>`;
+                                
+                            var title = item.title || item.file_name;
+                            
+                            // 卡片和文字全部加上 flex-shrink: 0，绝对不压缩高度
+                            gridHtml += `
+                            <div onclick="openWorkDetail('${item.id}')" style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; height: 220px !important; min-height: 220px !important; max-height: 220px !important; flex: 0 0 180px !important; display: flex !important; flex-direction: column !important; background: #1e1e1e !important; border: 1px solid #333 !important; border-radius: 12px !important; overflow: hidden !important; cursor: pointer !important; box-sizing: border-box !important; transition: transform 0.2s; margin: 0 !important; padding: 0 !important;" onmouseover="this.style.transform='translateY(-3px)'; this.style.borderColor='#555';" onmouseout="this.style.transform='none'; this.style.borderColor='#333';">
+                                ${headerHtml}
+                                <div style="height: 80px !important; min-height: 80px !important; max-height: 80px !important; flex-shrink: 0 !important; padding: 10px !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; box-sizing: border-box !important; background: #1e1e1e !important; width: 100% !important;">
+                                    <div title="${escapeHtml(title)}" style="margin: 0 !important; font-size: 0.95em !important; font-weight: 600 !important; color: #fff !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; width: 100% !important; text-align: center !important;">${escapeHtml(title)}</div>
+                                </div>
+                            </div>`;
+                        });
+                        gridEl.innerHTML = gridHtml;
+                    });
+                }
+
+                renderGrid('');
             });
-            container.innerHTML = html;
         });
-    });
+    }
+
+    if (category === 'favWorks') {
+        supabaseClient.from('work_favorites').select('work_id').eq('user_id', currentUser.id).then(function(favRes) {
+            if (favRes.error) { container.innerHTML = '<div class="empty-state">加载失败：' + favRes.error.message + '</div>'; return; }
+            var workIds = (favRes.data || []).map(function(f) { return f.work_id; });
+            if (workIds.length === 0) {
+                container.innerHTML = '<div class="empty-state">你还没有收藏过作品哦~</div>';
+                return;
+            }
+            fetchAndRender(workIds, true);
+        });
+    } else {
+        fetchAndRender(null, false);
+    }
 }
 
 window.openWorkDetail = function(id) {
     var item = globalWorksData.find(function(x) { return String(x.id) === String(id); });
     if (!item) return;
 
-    // 1. 填充数据
     document.getElementById('detailWorkTitle').textContent = item.title || item.file_name;
     document.getElementById('detailWorkDesc').textContent = item.description || '暂无简介';
-    document.getElementById('detailWorkTime').textContent = new Date(item.created_at).toLocaleString('zh-CN', { hour12: false });
     document.getElementById('detailWorkSize').textContent = (item.file_size / 1024 / 1024).toFixed(2) + ' MB';
     
-    var authorName = (item.user_id === currentUser.id) ? "我自己" : "其他用户";
-    document.getElementById('detailWorkAuthor').textContent = '👤 ' + authorName;
+    var timeHtml = new Date(item.created_at).toLocaleString('zh-CN', { hour12: false });
+    if (item.work_code) {
+        timeHtml += ` <span id="copyWorkCodeBtn" title="点击复制作品ID" style="cursor:pointer; margin-left:10px; font-size:0.8em; padding:2px 6px; background:var(--theme-info-box); border-radius:4px; border:1px solid var(--theme-border); transition:all 0.2s;">作品 ID: ${item.work_code} 📋</span>`;
+    }
+    document.getElementById('detailWorkTime').innerHTML = timeHtml;
+    
+    var copyBtn = document.getElementById('copyWorkCodeBtn');
+    if (copyBtn) {
+        copyBtn.onclick = function() {
+            navigator.clipboard.writeText(item.work_code).then(function() {
+                var originalText = copyBtn.innerHTML;
+                copyBtn.innerHTML = '✅ 已复制!';
+                copyBtn.style.color = 'var(--theme-accent)';
+                copyBtn.style.borderColor = 'var(--theme-accent)';
+                setTimeout(function() {
+                    copyBtn.innerHTML = originalText;
+                    copyBtn.style.color = '';
+                    copyBtn.style.borderColor = 'var(--theme-border)';
+                }, 1500);
+            });
+        };
+    }
 
-    // 2. 处理封面
+    var authorEl = document.getElementById('detailWorkAuthor');
+    if (item.user_id === currentUser.id) {
+        authorEl.textContent = '👤 ' + (myProfile && myProfile.full_name ? myProfile.full_name : '我自己');
+    } else {
+        authorEl.textContent = '👤 加载中...';
+        supabaseClient.from('profiles').select('full_name, email').eq('id', item.user_id).maybeSingle().then(function(res) {
+            var name = (res.data && (res.data.full_name || res.data.email)) ? (res.data.full_name || res.data.email) : '未知用户';
+            authorEl.textContent = '👤 ' + name;
+        });
+    }
+
     var coverImg = document.getElementById('detailWorkCover');
     var fallbackIcon = document.getElementById('detailWorkIcon');
     var isImg = /\.(jpg|jpeg|png|gif|webp)$/i.test(item.file_name);
     var isVid = /\.(mp4|webm|mov)$/i.test(item.file_name);
     fallbackIcon.textContent = isImg ? '🖼️' : (isVid ? '🎬' : '📄');
     
-    if (item.finalCoverUrl) {
-        coverImg.src = item.finalCoverUrl;
+    if (item.cover_url) {
         coverImg.style.display = 'block';
         fallbackIcon.style.display = 'none';
-    } else if (item.cover_url) {
-        coverImg.src = item.cover_url; // 兜底
-        coverImg.style.display = 'block';
-        fallbackIcon.style.display = 'none';
+        if (item.cover_url.indexOf('.myqcloud.com/') !== -1 && cosReady && cos) {
+            var key = item.cover_url.split('.myqcloud.com/')[1].split('?')[0];
+            cos.getObjectUrl({ Bucket: COS_BUCKET, Region: COS_REGION, Key: key, Sign: true, Expires: 3600 }, function(err, data2) {
+                coverImg.src = (data2 && data2.Url) ? data2.Url : item.cover_url;
+            });
+        } else {
+            coverImg.src = item.cover_url;
+        }
+        coverImg.onerror = function() { this.style.display = 'none'; fallbackIcon.style.display = 'flex'; };
     } else {
         coverImg.style.display = 'none';
         fallbackIcon.style.display = 'flex';
     }
-    coverImg.onerror = function() { this.style.display = 'none'; fallbackIcon.style.display = 'flex'; };
 
-    // ★ 核心：提前预生成带签名的下载链接（存入 item.downloadUrl）
-    item.downloadUrl = '';
-    if (item.file_key && cosReady && cos) {
-        var mainKey = item.file_key;
-        if (mainKey.indexOf('.myqcloud.com/') !== -1) {
-            mainKey = mainKey.split('.myqcloud.com/')[1].split('?')[0];
-        }
-        cos.getObjectUrl({
-            Bucket: COS_BUCKET, Region: COS_REGION, Key: mainKey, Sign: true, Expires: 3600
-        }, function(err, data) {
-            if (data && data.Url) {
-                item.downloadUrl = data.Url;
-            }
-        });
-    } else if (item.file_key) {
-        // 如果是公有读桶，直接拼
-        item.downloadUrl = 'https://' + COS_BUCKET + '.cos.' + COS_REGION + '.myqcloud.com/' + item.file_key;
-    }
-
-    // 3. 动态生成按钮 (编辑、删除、下载)
     var actionsHtml = '';
     if (item.user_id === currentUser.id && currentCategoryList === 'myWorks') {
-        actionsHtml += `<button id="detailWorkEditBtn" style="height: 42px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid var(--theme-accent-border); background: var(--theme-accent-soft); color: var(--theme-accent); cursor: pointer; font-weight: 500;">✏️ 编辑</button>`;
-        actionsHtml += `<button id="detailWorkDeleteBtn" style="height: 42px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid rgba(214,139,139,.45); background: rgba(214,139,139,.15); color: var(--danger); cursor: pointer; font-weight: 500;">🗑 删除</button>`;
+        actionsHtml += `<button id="detailWorkEditBtn" style="height: 42px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid var(--theme-accent-border); background: var(--theme-accent-soft); color: var(--theme-accent); cursor: pointer; font-weight: 500; margin-right: 8px;">✏️ 编辑</button>`;
+        actionsHtml += `<button id="detailWorkDeleteBtn" style="height: 42px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid rgba(214,139,139,.45); background: rgba(214,139,139,.15); color: var(--danger); cursor: pointer; font-weight: 500; margin-right: 8px;">🗑 删除</button>`;
     }
+    
+    if (item.user_id !== currentUser.id) {
+        actionsHtml += `<button id="detailWorkFavBtn" style="height: 42px; padding: 0 20px; background: transparent; border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: var(--radius-md); cursor: pointer; margin-right: 8px; transition: all 0.2s;">⭐ 收藏</button>`;
+    }
+    
     actionsHtml += `<button id="detailWorkDownloadBtn" class="btn-save" style="height: 42px; padding: 0 24px; width: auto;">📥 下载文件</button>`;
     
     document.getElementById('detailWorkActions').innerHTML = actionsHtml;
 
-    // 4. 绑定按钮事件
     document.getElementById('detailWorkDownloadBtn').onclick = function() {
-        // 此时链接大概率已经生成好了，直接使用 a 标签下载（绝对不会被拦截）
-        if (item.downloadUrl) {
-            var a = document.createElement('a');
-            a.href = item.downloadUrl;
-            a.download = item.file_name || '作品文件';
-            a.target = '_blank';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        } else {
-            alert('正在生成下载链接，请稍后点击重试...');
-        }
+        downloadWork(item.file_key, item.file_name);
     };
     
     if (document.getElementById('detailWorkEditBtn')) {
@@ -615,7 +717,43 @@ window.openWorkDetail = function(id) {
         };
     }
 
-    // 5. 绑定关闭按钮
+    if (document.getElementById('detailWorkFavBtn')) {
+        var favBtn = document.getElementById('detailWorkFavBtn');
+        supabaseClient.from('work_favorites').select('id').eq('user_id', currentUser.id).eq('work_id', item.id).maybeSingle().then(function(favRes) {
+            if (favRes.data) {
+                favBtn.innerHTML = '💔 取消收藏';
+                favBtn.style.color = 'var(--danger)';
+                favBtn.style.borderColor = 'rgba(214,139,139,.45)';
+            }
+        });
+
+        favBtn.onclick = function() {
+            var btn = this;
+            btn.disabled = true;
+            supabaseClient.from('work_favorites').select('id').eq('user_id', currentUser.id).eq('work_id', item.id).maybeSingle().then(function(favRes) {
+                if (favRes.data) {
+                    return supabaseClient.from('work_favorites').delete().eq('id', favRes.data.id).then(function(res) {
+                        if (!res.error) {
+                            btn.innerHTML = '⭐ 收藏';
+                            btn.style.color = 'var(--theme-text)';
+                            btn.style.borderColor = 'var(--theme-border)';
+                        }
+                        btn.disabled = false;
+                    });
+                } else {
+                    return supabaseClient.from('work_favorites').insert([{ user_id: currentUser.id, work_id: item.id }]).then(function(res) {
+                        if (!res.error) {
+                            btn.innerHTML = '💔 取消收藏';
+                            btn.style.color = 'var(--danger)';
+                            btn.style.borderColor = 'rgba(214,139,139,.45)';
+                        }
+                        btn.disabled = false;
+                    });
+                }
+            });
+        };
+    }
+
     var closeBtn = document.getElementById('detailWorkCloseBtn');
     if (closeBtn) {
         closeBtn.onclick = function() {
@@ -629,21 +767,8 @@ window.openWorkDetail = function(id) {
         };
     }
 
-    // 6. 显示弹窗
     document.getElementById('workDetailModal').style.display = 'flex';
 };
-
-// 空值判断，防止脚本崩溃
-(function () {
-    var _detailCloseBtn = document.getElementById('detailWorkCloseBtn');
-    if (_detailCloseBtn) {
-        _detailCloseBtn.onclick = function() { document.getElementById('workDetailModal').style.display = 'none'; };
-    }
-    var _detailModal = document.getElementById('workDetailModal');
-    if (_detailModal) {
-        _detailModal.addEventListener('click', function(e) { if (e.target === this) this.style.display = 'none'; });
-    }
-})();
 
 var uploadCoverFile = null; var uploadMainFile = null;
 var btnOpenUpload = document.getElementById('openUploadModalBtn');
@@ -699,6 +824,7 @@ if (btnSubmitUpload) {
         var desc = document.getElementById('uploadWorkDesc').value.trim();
         if (!title) { alert('请输入作品名称'); return; }
         if (!uploadMainFile) { alert('请选择要上传的主文件'); return; }
+        
         var btn = this; btn.disabled = true; btn.textContent = '上传中...';
         var progressBar = document.getElementById('uploadProgressBar');
         var progressInner = document.getElementById('uploadProgressInner');
@@ -720,23 +846,41 @@ if (btnSubmitUpload) {
             var fileExt = uploadMainFile.name.split('.').pop();
             var mainFileName = Date.now() + '_' + Math.floor(Math.random() * 10000) + '.' + fileExt;
             var mainFileKey = 'works/' + currentUser.id + '/' + mainFileName;
+            
             return new Promise((resolve, reject) => {
-                cos.putObject({ Bucket: COS_BUCKET, Region: COS_REGION, Key: mainFileKey, Body: uploadMainFile, onProgress: function (info) { if(progressInner) progressInner.style.width = Math.floor(info.percent * 100) + '%'; } }, function(err, data) {
+                cos.putObject({
+                    Bucket: COS_BUCKET, Region: COS_REGION, Key: mainFileKey, Body: uploadMainFile,
+                    onProgress: function (info) { if(progressInner) progressInner.style.width = Math.floor(info.percent * 100) + '%'; }
+                }, function(err, data) {
                     if (err) reject(new Error('主文件上传失败：' + err.message));
                     else resolve({ coverUrl: coverUrl, fileKey: mainFileKey });
                 });
             });
         })
         .then(function(result) {
-            var payload = { user_id: currentUser.id, title: title, description: desc, cover_url: result.coverUrl, file_key: result.fileKey, file_name: uploadMainFile.name, file_size: uploadMainFile.size, category: category };
+            var randomWorkCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+            var payload = {
+                user_id: currentUser.id, title: title, description: desc, cover_url: result.coverUrl,
+                file_key: result.fileKey, file_name: uploadMainFile.name, file_size: uploadMainFile.size,
+                category: category, work_code: randomWorkCode
+            };
             return supabaseClient.from('user_works').insert([payload]);
         })
         .then(function(res) {
             if(progressBar) progressBar.style.display = 'none';
             btn.disabled = false; btn.textContent = '开始上传';
             if (res && res.error) { alert('保存记录失败：' + res.error.message); return; }
+            
             alert('🎉 作品上传成功！');
             document.getElementById('uploadWorkModal').style.display = 'none';
+            document.getElementById('uploadWorkTitle').value = '';
+            document.getElementById('uploadWorkDesc').value = '';
+            document.getElementById('uploadMainFile').value = '';
+            document.getElementById('uploadCoverInput').value = '';
+            document.getElementById('uploadCoverPreview').innerHTML = '🖼️';
+            document.getElementById('uploadMainFileName').textContent = '未选择文件';
+            uploadCoverFile = null; uploadMainFile = null;
+
             if (currentCategoryList === 'myWorks') loadWorksList('myWorks');
             if (currentCategoryList === category) loadWorksList(category);
         })
@@ -1315,3 +1459,38 @@ document.addEventListener('DOMContentLoaded', function () {
     var logoutButton = document.getElementById('logoutBtn');
     if (logoutButton) { logoutButton.onclick = function () { if (confirm('确定要退出登录吗？')) { if (window.supabaseClient) { window.supabaseClient.auth.signOut().then(function () { location.href = 'index.html'; }); } else { location.href = 'index.html'; } } }; }
 });
+
+window.downloadWork = function(fileKey, fileName) {
+    if (!fileKey) { alert('❌ 错误：文件不存在'); return; }
+    if (!cosReady || !cos) { alert('❌ 错误：云端存储未连接，请刷新页面重试'); return; }
+
+    try {
+        var url = cos.getObjectUrl({
+            Bucket: COS_BUCKET,
+            Region: COS_REGION,
+            Key: fileKey,
+            Sign: true,
+            Expires: 3600
+        });
+
+        if (url) {
+            // 绝杀：创建隐形 iframe，浏览器防弹窗拦截机制对 iframe 无效
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = url;
+            document.body.appendChild(iframe);
+            
+            // 10秒后清理掉节点
+            setTimeout(function() {
+                if (iframe.parentNode) {
+                    iframe.parentNode.removeChild(iframe);
+                }
+            }, 10000);
+        } else {
+            alert('❌ 获取下载链接失败，请稍后再试');
+        }
+    } catch (err) {
+        console.error('下载异常:', err);
+        alert('❌ 下载出错：' + err.message);
+    }
+};
