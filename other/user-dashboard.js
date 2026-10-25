@@ -475,7 +475,6 @@ function loadWorksList(category) {
     if (!container) return;
     container.innerHTML = '<div class="empty-state">' + t('common.loading', '加载中...') + '</div>';
     
-    // 强行撑爆父级
     var parentCard = container.closest('.card');
     if (parentCard) {
         parentCard.style.setProperty('max-width', '100%', 'important');
@@ -483,7 +482,9 @@ function loadWorksList(category) {
     }
 
     function fetchAndRender(workIds, fromFav) {
-        var query = supabaseClient.from('user_works').select('*');
+        // 同时查询关联的点赞数
+        var query = supabaseClient.from('user_works').select('*, work_likes(count)');
+        
         if (fromFav) { query = query.in('id', workIds); } 
         else if (category === 'myWorks') { query = query.eq('user_id', currentUser.id); } 
         else { query = query.eq('category', category); }
@@ -493,6 +494,19 @@ function loadWorksList(category) {
         query.then(function (res) {
             if (res.error) { container.innerHTML = '<div class="empty-state">加载失败：' + res.error.message + '</div>'; return; }
             var data = res.data || [];
+            
+            // 处理点赞数
+            data.forEach(function(item) {
+                item.like_count = (item.work_likes && item.work_likes.length > 0) ? item.work_likes[0].count : 0;
+            });
+
+            // 如果是公共作品，按点赞数从高到低排序
+            if (category !== 'myWorks' && category !== 'favWorks') {
+                data.sort(function(a, b) {
+                    return b.like_count - a.like_count;
+                });
+            }
+
             globalWorksData = data;
             
             if (data.length === 0) { 
@@ -511,10 +525,8 @@ function loadWorksList(category) {
                     if (!item.work_code) item.work_code = '暂无';
                 });
 
-                // 1. 列表容器：强制横向排版，高度自动
                 container.innerHTML = `<div id="worksGrid_${category}" style="display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 20px !important; width: 100% !important; height: auto !important; align-items: flex-start !important;"></div>`;
 
-                // 2. 把搜索框塞进标题栏
                 if (parentCard) {
                     var cardHead = parentCard.querySelector('.card-head');
                     if (cardHead) {
@@ -581,26 +593,25 @@ function loadWorksList(category) {
                             var isVid = /\.(mp4|webm|mov)$/i.test(item.file_name);
                             var defaultIcon = isImg ? '🖼️' : (isVid ? '🎬' : '📄');
                             
-                            // 【绝杀】不用 img 标签，直接用 background-image，彻底防屏蔽防压扁！
                             var headerHtml = item.finalCoverUrl
                                 ? `<div style="width: 100% !important; height: 140px !important; min-height: 140px !important; max-height: 140px !important; flex-shrink: 0 !important; background-image: url('${escapeHtml(item.finalCoverUrl)}'); background-size: cover !important; background-position: center !important; background-repeat: no-repeat !important; border-radius: 12px 12px 0 0 !important; margin: 0 !important; padding: 0 !important; display: block !important;"></div>` 
                                 : `<div style="display: flex !important; width: 100% !important; height: 140px !important; min-height: 140px !important; flex-shrink: 0 !important; align-items: center !important; justify-content: center !important; font-size: 2.5em !important; background: #2a2a2a !important; color: #666 !important; border-radius: 12px 12px 0 0 !important;">${defaultIcon}</div>`;
                                 
                             var title = item.title || item.file_name;
                             
-                            // 卡片和文字全部加上 flex-shrink: 0，绝对不压缩高度
+                            // 在卡片底部加上点赞数显示
                             gridHtml += `
                             <div onclick="openWorkDetail('${item.id}')" style="width: 180px !important; min-width: 180px !important; max-width: 180px !important; height: 220px !important; min-height: 220px !important; max-height: 220px !important; flex: 0 0 180px !important; display: flex !important; flex-direction: column !important; background: #1e1e1e !important; border: 1px solid #333 !important; border-radius: 12px !important; overflow: hidden !important; cursor: pointer !important; box-sizing: border-box !important; transition: transform 0.2s; margin: 0 !important; padding: 0 !important;" onmouseover="this.style.transform='translateY(-3px)'; this.style.borderColor='#555';" onmouseout="this.style.transform='none'; this.style.borderColor='#333';">
                                 ${headerHtml}
                                 <div style="height: 80px !important; min-height: 80px !important; max-height: 80px !important; flex-shrink: 0 !important; padding: 10px !important; display: flex !important; flex-direction: column !important; align-items: center !important; justify-content: center !important; box-sizing: border-box !important; background: #1e1e1e !important; width: 100% !important;">
                                     <div title="${escapeHtml(title)}" style="margin: 0 !important; font-size: 0.95em !important; font-weight: 600 !important; color: #fff !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; width: 100% !important; text-align: center !important;">${escapeHtml(title)}</div>
+                                    <div style="font-size: 0.75em; color: #888; margin-top: 4px;">👍 ${item.like_count || 0}</div>
                                 </div>
                             </div>`;
                         });
                         gridEl.innerHTML = gridHtml;
                     });
                 }
-
                 renderGrid('');
             });
         });
@@ -692,10 +703,15 @@ window.openWorkDetail = function(id) {
         actionsHtml += `<button id="detailWorkDeleteBtn" style="height: 42px; padding: 0 16px; border-radius: var(--radius-md); border: 1px solid rgba(214,139,139,.45); background: rgba(214,139,139,.15); color: var(--danger); cursor: pointer; font-weight: 500; margin-right: 8px;">🗑 删除</button>`;
     }
     
+    // 点赞按钮
+    actionsHtml += `<button id="detailWorkLikeBtn" style="height: 42px; padding: 0 20px; background: transparent; border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: var(--radius-md); cursor: pointer; margin-right: 8px; transition: all 0.2s;">👍 点赞 <span id="detailWorkLikeCount">${item.like_count || 0}</span></button>`;
+
+    // 收藏按钮
     if (item.user_id !== currentUser.id) {
         actionsHtml += `<button id="detailWorkFavBtn" style="height: 42px; padding: 0 20px; background: transparent; border: 1px solid var(--theme-border); color: var(--theme-text); border-radius: var(--radius-md); cursor: pointer; margin-right: 8px; transition: all 0.2s;">⭐ 收藏</button>`;
     }
     
+    // 下载按钮
     actionsHtml += `<button id="detailWorkDownloadBtn" class="btn-save" style="height: 42px; padding: 0 24px; width: auto;">📥 下载文件</button>`;
     
     document.getElementById('detailWorkActions').innerHTML = actionsHtml;
@@ -712,7 +728,6 @@ window.openWorkDetail = function(id) {
         btn.innerHTML = '⏳ 正在拉取...';
         btn.disabled = true;
 
-        // 【核心修复】必须使用回调函数来获取带签名的 URL
         cos.getObjectUrl({
             Bucket: COS_BUCKET,
             Region: COS_REGION,
@@ -729,7 +744,6 @@ window.openWorkDetail = function(id) {
             }
             
             if (data && data.Url) {
-                // 触发下载，加上 a 标签
                 var a = document.createElement('a');
                 a.href = data.Url;
                 a.download = fileName || '作品文件';
@@ -753,6 +767,47 @@ window.openWorkDetail = function(id) {
                 document.getElementById('workDetailModal').style.display = 'none';
                 deleteWork(item.id, item.file_key);
             }
+        };
+    }
+
+    if (document.getElementById('detailWorkLikeBtn')) {
+        var likeBtn = document.getElementById('detailWorkLikeBtn');
+        var likeCountSpan = document.getElementById('detailWorkLikeCount');
+
+        supabaseClient.from('work_likes').select('id').eq('user_id', currentUser.id).eq('work_id', item.id).maybeSingle().then(function(likeRes) {
+            if (likeRes.data) {
+                likeBtn.innerHTML = `❤️ 已赞 <span id="detailWorkLikeCount">${item.like_count || 0}</span>`;
+                likeBtn.style.color = 'var(--danger)';
+                likeBtn.style.borderColor = 'rgba(214,139,139,.45)';
+            }
+        });
+
+        likeBtn.onclick = function() {
+            var btn = this;
+            btn.disabled = true;
+            supabaseClient.from('work_likes').select('id').eq('user_id', currentUser.id).eq('work_id', item.id).maybeSingle().then(function(likeRes) {
+                if (likeRes.data) {
+                    return supabaseClient.from('work_likes').delete().eq('id', likeRes.data.id).then(function(res) {
+                        if (!res.error) {
+                            item.like_count = Math.max(0, (item.like_count || 0) - 1);
+                            btn.innerHTML = `👍 点赞 <span>${item.like_count}</span>`;
+                            btn.style.color = 'var(--theme-text)';
+                            btn.style.borderColor = 'var(--theme-border)';
+                        }
+                        btn.disabled = false;
+                    });
+                } else {
+                    return supabaseClient.from('work_likes').insert([{ user_id: currentUser.id, work_id: item.id }]).then(function(res) {
+                        if (!res.error) {
+                            item.like_count = (item.like_count || 0) + 1;
+                            btn.innerHTML = `❤️ 已赞 <span>${item.like_count}</span>`;
+                            btn.style.color = 'var(--danger)';
+                            btn.style.borderColor = 'rgba(214,139,139,.45)';
+                        }
+                        btn.disabled = false;
+                    });
+                }
+            });
         };
     }
 
@@ -1498,29 +1553,3 @@ document.addEventListener('DOMContentLoaded', function () {
     var logoutButton = document.getElementById('logoutBtn');
     if (logoutButton) { logoutButton.onclick = function () { if (confirm('确定要退出登录吗？')) { if (window.supabaseClient) { window.supabaseClient.auth.signOut().then(function () { location.href = 'index.html'; }); } else { location.href = 'index.html'; } } }; }
 });
-
-window.downloadWork = function(fileKey, fileName) {
-    if (!fileKey) { alert('【第二步报错】❌ 文件不存在 (fileKey 为空)'); return; }
-    if (!cosReady || !cos) { alert('【第二步报错】❌ 云端未连接 (cosReady: ' + cosReady + ')'); return; }
-
-    try {
-        alert("【第二步】开始生成链接...");
-        var url = cos.getObjectUrl({
-            Bucket: COS_BUCKET,
-            Region: COS_REGION,
-            Key: fileKey,
-            Sign: true,
-            Expires: 3600
-        });
-
-        if (!url) { alert('【第三步报错】❌ 链接生成失败，返回了空值'); return; }
-
-        alert("【第三步】链接生成成功！即将触发下载\n" + url);
-
-        // 暴力跳转下载
-        window.location.href = url;
-
-    } catch (err) {
-        alert('【异常崩溃】❌ 代码执行报错：\n' + err.message);
-    }
-};
