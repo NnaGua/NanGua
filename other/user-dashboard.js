@@ -701,7 +701,46 @@ window.openWorkDetail = function(id) {
     document.getElementById('detailWorkActions').innerHTML = actionsHtml;
 
     document.getElementById('detailWorkDownloadBtn').onclick = function() {
-        downloadWork(item.file_key, item.file_name);
+        var fileKey = item.file_key;
+        var fileName = item.file_name;
+        
+        if (!fileKey) { alert('❌ 错误：文件路径为空'); return; }
+        if (!cosReady || !cos) { alert('❌ 错误：云端未连接'); return; }
+        
+        var btn = this;
+        var oldText = btn.innerHTML;
+        btn.innerHTML = '⏳ 正在拉取...';
+        btn.disabled = true;
+
+        // 【核心修复】必须使用回调函数来获取带签名的 URL
+        cos.getObjectUrl({
+            Bucket: COS_BUCKET,
+            Region: COS_REGION,
+            Key: fileKey,
+            Sign: true,
+            Expires: 3600
+        }, function(err, data) {
+            btn.innerHTML = oldText;
+            btn.disabled = false;
+            
+            if (err) {
+                alert('❌ 获取链接失败：' + (err.message || '未知错误'));
+                return;
+            }
+            
+            if (data && data.Url) {
+                // 触发下载，加上 a 标签
+                var a = document.createElement('a');
+                a.href = data.Url;
+                a.download = fileName || '作品文件';
+                a.target = '_blank';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                alert('❌ 获取链接失败：返回的地址为空');
+            }
+        });
     };
     
     if (document.getElementById('detailWorkEditBtn')) {
@@ -1461,10 +1500,11 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 window.downloadWork = function(fileKey, fileName) {
-    if (!fileKey) { alert('❌ 错误：文件不存在'); return; }
-    if (!cosReady || !cos) { alert('❌ 错误：云端存储未连接，请刷新页面重试'); return; }
+    if (!fileKey) { alert('【第二步报错】❌ 文件不存在 (fileKey 为空)'); return; }
+    if (!cosReady || !cos) { alert('【第二步报错】❌ 云端未连接 (cosReady: ' + cosReady + ')'); return; }
 
     try {
+        alert("【第二步】开始生成链接...");
         var url = cos.getObjectUrl({
             Bucket: COS_BUCKET,
             Region: COS_REGION,
@@ -1473,24 +1513,14 @@ window.downloadWork = function(fileKey, fileName) {
             Expires: 3600
         });
 
-        if (url) {
-            // 绝杀：创建隐形 iframe，浏览器防弹窗拦截机制对 iframe 无效
-            var iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            iframe.src = url;
-            document.body.appendChild(iframe);
-            
-            // 10秒后清理掉节点
-            setTimeout(function() {
-                if (iframe.parentNode) {
-                    iframe.parentNode.removeChild(iframe);
-                }
-            }, 10000);
-        } else {
-            alert('❌ 获取下载链接失败，请稍后再试');
-        }
+        if (!url) { alert('【第三步报错】❌ 链接生成失败，返回了空值'); return; }
+
+        alert("【第三步】链接生成成功！即将触发下载\n" + url);
+
+        // 暴力跳转下载
+        window.location.href = url;
+
     } catch (err) {
-        console.error('下载异常:', err);
-        alert('❌ 下载出错：' + err.message);
+        alert('【异常崩溃】❌ 代码执行报错：\n' + err.message);
     }
 };
