@@ -149,10 +149,29 @@ var infoName       = document.getElementById('infoName');
 var infoPhone      = document.getElementById('infoPhone');
 var infoCreated    = document.getElementById('infoCreated');
 
-supabaseClient.auth.getSession().then(function (res) {
+// ★ 优化：加 3 秒超时，防止本地打开时请求挂起导致白屏或卡死
+Promise.race([
+    supabaseClient.auth.getSession(),
+    new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+]).then(function (res) {
     var session = res.data && res.data.session;
     if (!session) { location.href = 'index.html'; return; }
     bootUser(session.user);
+}).catch(function(err) {
+    console.warn('[Supabase] 获取 Session 超时，尝试从缓存恢复...', err);
+    // 尝试读取浏览器本地缓存的 Token
+    var cached = localStorage.getItem('sb-syxawclhvreyxltynpnj-auth-token');
+    if (cached) {
+        try {
+            var parsed = JSON.parse(cached);
+            if (parsed && parsed.user) {
+                bootUser(parsed.user); // 直接用缓存里的用户信息渲染
+                return;
+            }
+        } catch(e){}
+    }
+    // 如果完全没有缓存，退回登录页
+    location.href = 'index.html';
 });
 supabaseClient.auth.onAuthStateChange(function (event, session) {
     if (event === 'SIGNED_OUT' || !session) location.href = 'index.html';
@@ -197,10 +216,13 @@ function bootUser(user) {
             document.getElementById('infoBio').textContent = userBio || t('userDash.homeNoBio', '暂无简介');
             document.getElementById('welcomeBio').textContent = userBio || t('userDash.homeBioDefault', '这里是你的个人主页');
 
-            document.getElementById('editBioBtn').addEventListener('click', function () {
-                document.getElementById('bioInput').value = userBio;
-                document.getElementById('bioModal').style.display = 'flex';
-            });
+            var editBioBtn = document.getElementById('editBioBtn');
+            if (editBioBtn) {
+                editBioBtn.addEventListener('click', function () {
+                    document.getElementById('bioInput').value = userBio;
+                    document.getElementById('bioModal').style.display = 'flex';
+                });
+            }
             document.getElementById('bioCancelBtn').addEventListener('click', function () {
                 document.getElementById('bioModal').style.display = 'none';
             });
@@ -217,14 +239,17 @@ function bootUser(user) {
                 });
             });
 
-            document.getElementById('editNameBtn').addEventListener('click', function () {
-                document.getElementById('nameInput').value = profile.full_name || '';
-                document.getElementById('nameModal').style.display = 'flex';
-                setTimeout(function () {
-                    document.getElementById('nameInput').focus();
-                    document.getElementById('nameInput').select();
-                }, 50);
-            });
+            var editNameBtn = document.getElementById('editNameBtn');
+            if (editNameBtn) {
+                editNameBtn.addEventListener('click', function () {
+                    document.getElementById('nameInput').value = profile.full_name || '';
+                    document.getElementById('nameModal').style.display = 'flex';
+                    setTimeout(function () {
+                        document.getElementById('nameInput').focus();
+                        document.getElementById('nameInput').select();
+                    }, 50);
+                });
+            }
             document.getElementById('nameCancelBtn').addEventListener('click', function () {
                 document.getElementById('nameModal').style.display = 'none';
             });
@@ -455,6 +480,7 @@ async function initCOS() {
             throw error;
         }
         if (!data || !data.credentials) throw new Error('未获取到有效秘钥');
+        
         cos = new COS({
             getAuthorization: function (options, callback) {
                 callback({ TmpSecretId: data.credentials.tmpSecretId, TmpSecretKey: data.credentials.tmpSecretKey, XCosSecurityToken: data.credentials.sessionToken, StartTime: data.startTime, ExpiredTime: data.expiredTime });
@@ -462,9 +488,11 @@ async function initCOS() {
         });
         cosReady = true;
         if (uploadBtn) { uploadBtn.innerHTML = '📤 上传新作品'; uploadBtn.style.opacity = '1'; uploadBtn.style.pointerEvents = 'auto'; }
+        return true; // ★ 新增：返回成功
     } catch (err) {
         console.error('COS 初始化异常:', err);
         if (uploadBtn) { uploadBtn.innerHTML = '❌ 失败: ' + (err.message || '未知错误'); uploadBtn.style.opacity = '0.8'; uploadBtn.style.color = '#ff6b6b'; uploadBtn.style.pointerEvents = 'none'; }
+        return false; // ★ 新增：返回失败
     }
 }
 initCOS();
@@ -716,14 +744,15 @@ window.openWorkDetail = function(id) {
     
     document.getElementById('detailWorkActions').innerHTML = actionsHtml;
 
-    document.getElementById('detailWorkDownloadBtn').onclick = function() {
-        var fileKey = item.file_key;
-        var fileName = item.file_name;
-        
-        if (!fileKey) { alert('❌ 错误：文件路径为空'); return; }
-        if (!cosReady || !cos) { alert('❌ 错误：云端未连接'); return; }
-        
-        var btn = this;
+document.getElementById('detailWorkDownloadBtn').onclick = function() {
+    var fileKey = item.file_key;
+    var fileName = item.file_name;
+    var btn = this;
+    
+    if (!fileKey) { alert('❌ 错误：文件路径为空'); return; }
+
+    // 内部执行下载的函数
+    function executeDownload() {
         var oldText = btn.innerHTML;
         btn.innerHTML = '⏳ 正在拉取...';
         btn.disabled = true;
@@ -742,7 +771,6 @@ window.openWorkDetail = function(id) {
                 alert('❌ 获取链接失败：' + (err.message || '未知错误'));
                 return;
             }
-            
             if (data && data.Url) {
                 var a = document.createElement('a');
                 a.href = data.Url;
@@ -755,7 +783,29 @@ window.openWorkDetail = function(id) {
                 alert('❌ 获取链接失败：返回的地址为空');
             }
         });
-    };
+    }
+
+    // 如果已经连接，直接下载
+    if (cosReady && cos) {
+        executeDownload();
+    } else {
+        // 如果没连接，先显示“重连中”，尝试重新连接一次
+        var oldText = btn.innerHTML;
+        btn.innerHTML = '⏳ 重连云端...';
+        btn.disabled = true;
+        
+        initCOS().then(function(success) {
+            btn.innerHTML = oldText;
+            btn.disabled = false;
+            if (success && cosReady && cos) {
+                // 连接成功，自动继续下载
+                executeDownload();
+            } else {
+                alert('❌ 错误：云端连接失败，请刷新页面或检查网络后重试');
+            }
+        });
+    }
+};
     
     if (document.getElementById('detailWorkEditBtn')) {
         document.getElementById('detailWorkEditBtn').onclick = function() {
@@ -1258,10 +1308,9 @@ function loadMyRank(userId) {
     supabaseClient.from('profiles').select('points').eq('id', userId).maybeSingle().then(function (r) {
         if (r.error || !r.data) return;
         var myPoints = r.data.points || 0;
-        Promise.all([supabaseClient.from('profiles').select('id', { count: 'exact', head: true }).gt('points', myPoints), supabaseClient.from('profiles').select('id', { count: 'exact', head: true })]).then(function (res) {
-            var higher = (res[0] && res[0].count) || 0; var total  = (res[1] && res[1].count) || 0; var rank   = higher + 1;
-            var el = document.getElementById('myRank'); if (el) el.textContent = rank + ' / ' + total;
-        });
+        // 直接显示积分，不再去请求全表统计，彻底解决卡顿
+        var el = document.getElementById('myRank');
+        if (el) el.textContent = myPoints + ' 分';
     });
 }
 var checkinBtnEl = document.getElementById('checkinBtn');
